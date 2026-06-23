@@ -1,0 +1,4 @@
+-keep class wallet.sdk.** { *; }
+-keep class com.nanu.aitradingbot.** { *; }
+-dontwarn wallet.sdk.**
+-dontwarn com.google.zxing.**
