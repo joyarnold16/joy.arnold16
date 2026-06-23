@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@android:color/black"/>
-    <foreground android:drawable="@android:drawable/ic_dialog_info"/>
-</adaptive-icon>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#0D1117"/>
+        </shape>
+    </item>
+    <item android:gravity="center">
+        <shape android:shape="oval">
+            <solid android:color="#00E5FF"/>
+            <size android:width="48dp" android:height="48dp"/>
+        </shape>
+    </item>
+</layer-list>
