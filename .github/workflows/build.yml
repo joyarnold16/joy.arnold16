@@ -20,14 +20,16 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
+
       - name: Create local.properties
         run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
-      - name: Grant gradlew permission
-        run: chmod +x gradlew
-
       - name: Build Release APK
-        run: ./gradlew assembleRelease --no-daemon
+        run: gradle assembleRelease --no-daemon --stacktrace
         env:
           JAVA_OPTS: "-Xmx4g"
 
@@ -40,10 +42,20 @@ jobs:
           alias: ${{ secrets.KEY_ALIAS }}
           keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "34.0.0"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: nanu-ai-v11-signed
           path: ${{ steps.sign_app.outputs.signedReleaseFile }}
+          retention-days: 30
+
+      - name: Upload unsigned (fallback)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nanu-ai-v11-unsigned
+          path: app/build/outputs/apk/release/*.apk
           retention-days: 30
