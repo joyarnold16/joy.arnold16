@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.dexscreener.com</domain>
+        <domain includeSubdomains="true">quote-api.jup.ag</domain>
+        <domain includeSubdomains="true">bsc-dataseed.binance.org</domain>
+        <domain includeSubdomains="true">api.mainnet-beta.solana.com</domain>
+        <domain includeSubdomains="true">api.binance.com</domain>
+        <domain includeSubdomains="true">api.telegram.org</domain>
+    </domain-config>
+</network-security-config>

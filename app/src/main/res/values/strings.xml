@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Nanu AI Trading Bot</string>
+    <string name="channel_id">nanu_trades</string>
+    <string name="channel_name">Nanu Trade Alerts</string>
+</resources>
