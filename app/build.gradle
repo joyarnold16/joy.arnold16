@@ -47,7 +47,17 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.multidex:multidex:2.0.1'
     implementation 'com.google.android.material:material:1.12.0'
-    implementation 'com.trustwallet:wallet-core:4.0.26'
+
+    // Trust Wallet Core - try Maven first, fall back to local AAR
+    if (new File("${projectDir}/libs/wallet-core.aar").exists()) {
+        implementation fileTree(dir: 'libs', include: ['*.aar', '*.jar'])
+    } else {
+        implementation 'com.trustwallet:wallet-core:4.0.26'
+    }
+
     implementation 'com.google.zxing:core:3.5.3'
     implementation 'com.google.protobuf:protobuf-javalite:3.25.3'
+
+    // Web3j for Ethereum/BNB signing (backup)
+    implementation 'org.web3j:crypto:4.9.8'
 }
