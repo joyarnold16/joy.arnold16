@@ -8,7 +8,7 @@ android {
 
     defaultConfig {
         applicationId "com.nanu.aitradingbot"
-        minSdk 23
+        minSdk 24
         targetSdk 35
         versionCode 36
         versionName "11.0-nanu"
@@ -33,13 +33,12 @@ android {
     }
 
     packagingOptions {
-        pickFirst 'lib/armeabi-v7a/libTrustWalletCore.so'
-        pickFirst 'lib/arm64-v8a/libTrustWalletCore.so'
-        pickFirst 'lib/x86/libTrustWalletCore.so'
-        pickFirst 'lib/x86_64/libTrustWalletCore.so'
-        pickFirst 'META-INF/DEPENDENCIES'
-        pickFirst 'META-INF/LICENSE'
-        pickFirst 'META-INF/NOTICE'
+        exclude 'META-INF/DEPENDENCIES'
+        exclude 'META-INF/LICENSE'
+        exclude 'META-INF/NOTICE'
+        exclude 'META-INF/LICENSE.md'
+        exclude 'META-INF/NOTICE.md'
+        pickFirst 'META-INF/*.kotlin_module'
     }
 }
 
@@ -48,16 +47,14 @@ dependencies {
     implementation 'androidx.multidex:multidex:2.0.1'
     implementation 'com.google.android.material:material:1.12.0'
 
-    // Trust Wallet Core - try Maven first, fall back to local AAR
-    if (new File("${projectDir}/libs/wallet-core.aar").exists()) {
-        implementation fileTree(dir: 'libs', include: ['*.aar', '*.jar'])
-    } else {
-        implementation 'com.trustwallet:wallet-core:4.0.26'
+    // Wallet: BIP39 + BIP32 + Ethereum signing (Maven Central)
+    implementation('org.web3j:crypto:4.9.8') {
+        exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
     }
 
-    implementation 'com.google.zxing:core:3.5.3'
-    implementation 'com.google.protobuf:protobuf-javalite:3.25.3'
+    // Solana: ed25519 signing (Maven Central, pure Java)
+    implementation 'net.i2p.crypto:eddsa:0.3.0'
 
-    // Web3j for Ethereum/BNB signing (backup)
-    implementation 'org.web3j:crypto:4.9.8'
+    // QR codes
+    implementation 'com.google.zxing:core:3.5.3'
 }

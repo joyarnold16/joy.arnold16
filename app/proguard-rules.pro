@@ -1,4 +1,7 @@
--keep class wallet.sdk.** { *; }
 -keep class com.nanu.aitradingbot.** { *; }
--dontwarn wallet.sdk.**
--dontwarn com.google.zxing.**
+-keep class net.i2p.crypto.eddsa.** { *; }
+-keep class org.web3j.** { *; }
+-dontwarn org.web3j.**
+-dontwarn net.i2p.**
+-dontwarn okhttp3.**
+-dontwarn okio.**

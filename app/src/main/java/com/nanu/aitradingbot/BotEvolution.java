@@ -30,19 +30,19 @@ public class BotEvolution {
 
     public static void evolve(DexAppStore store) {
         List<TradeRecord> history = store.loadHistory();
-        long closed = history.stream().filter(r -> !r.isOpen).count();
-        if (closed < MIN_TRADES) return;
+        int closedCount = 0;
+        for (TradeRecord r : history) if (!r.isOpen) closedCount++;
+        if (closedCount < MIN_TRADES) return;
 
         S best = null;
         double bestScore = Double.NEGATIVE_INFINITY;
-
         for (S s : POOL) {
-            double score = simulate(s, history);
-            Log.d(TAG, s.name + " sim score: " + score);
-            if (score > bestScore) { bestScore = score; best = s; }
+            double sc = simulate(s, history);
+            Log.d(TAG, s.name + " sim=" + sc);
+            if (sc > bestScore) { bestScore = sc; best = s; }
         }
-
         if (best == null) return;
+
         store.mlStrategy         = best.name;
         store.stopLossPercent    = best.sl;
         store.takeProfitPercent  = best.tp;
@@ -52,31 +52,23 @@ public class BotEvolution {
         store.maxHoldMinutes     = best.maxHold;
         store.mlGeneration++;
         store.save();
-        Log.i(TAG, "Evolved to " + best.name + " (gen " + store.mlGeneration + ")");
+        Log.i(TAG, "Evolved → " + best.name + " gen" + store.mlGeneration);
     }
 
     private static double simulate(S s, List<TradeRecord> history) {
         int wins = 0, total = 0;
         double pnl = 0;
         for (TradeRecord r : history) {
-            if (r.isOpen) continue;
-            // Check if this strategy would have entered
-            if (r.entryPrice <= 0) continue;
+            if (r.isOpen || r.entryPrice <= 0) continue;
             total++;
             double pct = r.pnlPercent;
-            // Simulate exit under this strategy's TP/SL
-            double simPct;
-            if (pct >= s.tp)         simPct = s.tp;
-            else if (pct <= -s.sl)   simPct = -s.sl;
-            else                     simPct = pct;
-            double simPnl = r.amountUsd * simPct / 100.0;
-            pnl += simPnl;
-            if (simPnl > 0) wins++;
+            double sim = pct >= s.tp ? s.tp : (pct <= -s.sl ? -s.sl : pct);
+            double p = r.amountUsd * sim / 100.0;
+            pnl += p;
+            if (p > 0) wins++;
         }
         if (total == 0) return 0;
-        double wr = (double) wins / total;
-        // Score: weighted win rate + total PnL factor
-        return wr * 60 + (pnl / total) * 40;
+        return ((double) wins / total) * 60 + (pnl / total) * 40;
     }
 
     public static String summary(DexAppStore store) {
