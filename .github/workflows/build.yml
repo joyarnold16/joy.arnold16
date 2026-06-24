@@ -31,28 +31,15 @@ jobs:
       - name: Create local.properties
         run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
-      - name: Download Trust Wallet Core AAR
-        run: |
-          mkdir -p app/libs
-          # Try GitHub releases first
-          curl -fL -o app/libs/wallet-core.aar \
-            "https://github.com/trustwallet/wallet-core/releases/download/4.0.26/wallet-core-android.aar" || \
-          curl -fL -o app/libs/wallet-core.aar \
-            "https://github.com/trustwallet/wallet-core/releases/download/4.0.26/android.aar" || \
-          curl -fL -o app/libs/wallet-core.aar \
-            "https://github.com/trustwallet/wallet-core/releases/download/4.0.26/wallet-core-release.aar" || true
-          ls -lh app/libs/ || true
-
       - name: Build Release APK
         run: gradle assembleRelease --no-daemon --stacktrace
         env:
           JAVA_OPTS: "-Xmx4g"
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_ACTOR: ${{ github.actor }}
 
       - name: Sign APK
-        uses: r0adkll/sign-android-release@v1
         id: sign_app
+        continue-on-error: true
+        uses: r0adkll/sign-android-release@v1
         with:
           releaseDirectory: app/build/outputs/apk/release
           signingKeyBase64: ${{ secrets.SIGNING_KEY }}
@@ -63,16 +50,16 @@ jobs:
           BUILD_TOOLS_VERSION: "34.0.0"
 
       - name: Upload signed APK
+        if: steps.sign_app.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: nanu-ai-v11-signed
           path: ${{ steps.sign_app.outputs.signedReleaseFile }}
           retention-days: 30
 
-      - name: Upload unsigned APK (fallback)
-        if: always()
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: nanu-ai-v11-unsigned
+          name: nanu-ai-v11
           path: app/build/outputs/apk/release/*.apk
           retention-days: 30
