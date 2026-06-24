@@ -103,7 +103,7 @@ public class SecurePrefs {
             net.i2p.crypto.eddsa.spec.EdDSAPrivateKeySpec spec =
                 new net.i2p.crypto.eddsa.spec.EdDSAPrivateKeySpec(
                     privKey,
-                    net.i2p.crypto.eddsa.EdDSANamedCurveTable.getByName("Ed25519"));
+                    net.i2p.crypto.eddsa.spec.EdDSANamedCurveTable.getByName("Ed25519"));
             net.i2p.crypto.eddsa.EdDSAPrivateKey pk =
                 new net.i2p.crypto.eddsa.EdDSAPrivateKey(spec);
             return Base58.encode(pk.getAbyte());

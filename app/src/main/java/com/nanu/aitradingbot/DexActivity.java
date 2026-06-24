@@ -134,7 +134,7 @@ public class DexActivity extends Activity {
         setContentView(root);
     }
 
-    private LinearLayout buildTabBar() {
+    private HorizontalScrollView buildTabBar() {
         String[] labels = {"Home","Discover","History","Position","Wallet","Control"};
         tabBtns = new TextView[labels.length];
         HorizontalScrollView hsv = new HorizontalScrollView(this);

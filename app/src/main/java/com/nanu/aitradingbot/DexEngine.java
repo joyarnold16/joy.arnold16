@@ -147,7 +147,7 @@ public class DexEngine {
                     List<TradeRecord> hist = store.loadHistory();
                     for (TradeRecord h : hist) if (r.id.equals(h.id)) { h.buyTxHash = txHash; break; }
                     store.saveHistory(hist);
-                    notify(r);
+                    DexEngine.this.notify(r);
                     BotEvolution.evolve(store);
                 }
                 @Override public void onFail(String reason) {

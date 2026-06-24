@@ -187,7 +187,7 @@ public class SwapEngine {
         net.i2p.crypto.eddsa.spec.EdDSAPrivateKeySpec spec =
             new net.i2p.crypto.eddsa.spec.EdDSAPrivateKeySpec(
                 privKey,
-                net.i2p.crypto.eddsa.EdDSANamedCurveTable.getByName("Ed25519"));
+                net.i2p.crypto.eddsa.spec.EdDSANamedCurveTable.getByName("Ed25519"));
         net.i2p.crypto.eddsa.EdDSAEngine signer = new net.i2p.crypto.eddsa.EdDSAEngine();
         signer.initSign(new net.i2p.crypto.eddsa.EdDSAPrivateKey(spec));
         byte[] sig = signer.signOneShot(txBytes);
