@@ -152,6 +152,17 @@ public class DexAppStore {
 
     public void reload() { load(); }
 
+    /** Resets the daily trade counter when the calendar day rolls over,
+     *  even if no trade was opened (e.g. bot ran idle past midnight). */
+    public void rolloverDayIfNeeded() {
+        long today = System.currentTimeMillis() / 86_400_000L;
+        if (today != lastTradeDay) {
+            tradesToday  = 0;
+            lastTradeDay = today;
+            save();
+        }
+    }
+
     public String getMnemonic()             { return secure.loadMnemonic(); }
     public boolean hasWallet()              { return !bnbAddress.isEmpty(); }
     public boolean hasTelegram()            { return !telegramToken.isEmpty() && !telegramChatId.isEmpty(); }

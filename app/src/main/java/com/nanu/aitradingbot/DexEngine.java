@@ -100,9 +100,11 @@ public class DexEngine {
         DexMarketClient.discover(store, new DexMarketClient.Callback() {
             @Override public void onResult(List<DexCandidate> candidates) {
                 lastScanResults = candidates;
-                // Add QUALIFIED candidates to queue (avoid duplicates)
+                // Rebuild queue from this scan only — stale candidates from
+                // previous cycles expire so we never enter on outdated data.
+                queue.clear();
                 for (DexCandidate c : candidates) {
-                    if ("QUALIFIED".equals(c.status) && !inQueue(c.tokenAddress))
+                    if ("QUALIFIED".equals(c.status) && !alreadyOpen(c.tokenAddress))
                         queue.add(c);
                 }
                 if (listener != null) listener.onScanResult(candidates);
@@ -117,6 +119,9 @@ public class DexEngine {
     // ─ QUEUE DRAIN (auto-retry next if blocked) ─────────────────────
 
     private void drainQueue() {
+        // Reset the daily counter if the calendar day changed while idle
+        store.rolloverDayIfNeeded();
+
         // Auto mode: re-evolve ML params before each drain cycle
         if (store.autoMode) BotEvolution.evolve(store);
 
@@ -289,8 +294,7 @@ public class DexEngine {
     // ─ PRICE FETCH ───────────────────────────────────────────────
 
     private double fetchCurrentPrice(TradeRecord r) throws Exception {
-        String chain = "bsc".equals(r.chain) ? "bsc" : "solana";
-        String url = "https://api.dexscreener.com/tokens/" + r.tokenAddress;
+        String url = "https://api.dexscreener.com/latest/dex/tokens/" + r.tokenAddress;
         java.net.HttpURLConnection conn =
             (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
         conn.setConnectTimeout(8000);
@@ -309,11 +313,6 @@ public class DexEngine {
     }
 
     // ─ HELPERS ──────────────────────────────────────────────────
-
-    private boolean inQueue(String addr) {
-        for (DexCandidate c : queue) if (addr.equals(c.tokenAddress)) return true;
-        return false;
-    }
 
     private boolean alreadyOpen(String addr) {
         for (TradeRecord r : store.getOpenPositions())

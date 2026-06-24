@@ -55,12 +55,16 @@ public class DexSafetyPolicy {
         int total = c.buys24h + c.sells24h;
         if (total < 20)
             return "too little buy/sell activity";
+        // Honeypot heuristic: lots of buys but virtually no sells means
+        // holders likely cannot sell (sell-tax 100% or blocked transfers).
+        if (c.buys24h >= 30 && (double) c.sells24h / total < 0.03)
+            return "possible honeypot (buys " + c.buys24h + " / sells " + c.sells24h + ")";
         long ageMs = System.currentTimeMillis() - c.pairCreatedAtMs;
         double ageH = ageMs / 3_600_000.0;
         if (c.pairCreatedAtMs > 0 && ageH < store.minPairAgeHours)
             return "pair is newer than required age";
-        if (c.priceChange1h < store.minMomentumPercent && c.priceChange1h >= 0)
-            return "momentum below minimum";
+        if (c.priceChange1h < store.minMomentumPercent)
+            return "momentum below minimum (or falling)";
         if (c.liquidityUsd < store.minLiquidityUsd)
             return "liquidity below strategy minimum";
         if (c.priceChange1h < -25)

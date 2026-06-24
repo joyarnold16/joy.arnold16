@@ -5,7 +5,7 @@ import java.util.List;
 
 public class BotEvolution {
     private static final String TAG = "BotEvolution";
-    public  static final int MIN_TRADES = 1;
+    public  static final int MIN_TRADES = 5;
 
     private static class S {
         final String name;
