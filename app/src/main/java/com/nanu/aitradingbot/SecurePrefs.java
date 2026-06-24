@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
+import android.util.Log;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.security.SecureRandom;
@@ -16,6 +17,7 @@ import javax.crypto.spec.GCMParameterSpec;
 import org.web3j.crypto.*;
 
 public class SecurePrefs {
+    private static final String TAG       = "SecurePrefs";
     private static final String KEYSTORE  = "AndroidKeyStore";
     private static final String KEY_ALIAS = "nanu_wallet_key";
     private static final String PREFS     = "nanu_secure";
@@ -44,7 +46,7 @@ public class SecurePrefs {
                     .setKeySize(256).build());
                 kg.generateKey();
             }
-        } catch (Exception e) { throw new RuntimeException("Keystore init failed", e); }
+        } catch (Exception e) { Log.e(TAG, "Keystore init failed: " + e.getMessage()); }
     }
 
     public void saveMnemonic(String mnemonic) {
@@ -59,7 +61,7 @@ public class SecurePrefs {
                 .putString(KEY_MNEM, Base64.encodeToString(enc, Base64.DEFAULT))
                 .putString(KEY_IV,   Base64.encodeToString(cipher.getIV(), Base64.DEFAULT))
                 .apply();
-        } catch (Exception e) { throw new RuntimeException("Save mnemonic failed", e); }
+        } catch (Exception e) { Log.e(TAG, "Save mnemonic failed: " + e.getMessage()); }
     }
 
     public String loadMnemonic() {

@@ -53,16 +53,26 @@ public class DexActivity extends Activity {
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        ui    = new Handler(Looper.getMainLooper());
-        store = new DexAppStore(this);
+        try {
+            ui    = new Handler(Looper.getMainLooper());
+            store = new DexAppStore(this);
 
-        if (!store.hasWallet()) createWallet();
+            if (!store.hasWallet()) createWallet();
 
-        engine = new DexEngine(this, store);
-        engine.setListener(engineListener);
+            engine = new DexEngine(this, store);
+            engine.setListener(engineListener);
 
-        buildRoot();
-        showTab(0);
+            buildRoot();
+            showTab(0);
+        } catch (Exception e) {
+            android.util.Log.e("DexActivity", "Startup crash", e);
+            TextView errView = new TextView(this);
+            errView.setText("Startup error: " + e.getClass().getSimpleName() + "\n" + e.getMessage());
+            errView.setTextColor(0xFFFFFFFF);
+            errView.setBackgroundColor(0xFF0D1117);
+            errView.setPadding(32, 64, 32, 32);
+            setContentView(errView);
+        }
     }
 
     @Override protected void onResume() {
@@ -78,16 +88,20 @@ public class DexActivity extends Activity {
     // —— Wallet ———————————————————————————————————————
 
     private void createWallet() {
-        String m = SecurePrefs.generateMnemonic();
-        if (m != null && !m.isEmpty()) {
-            store.saveMnemonic(m);
-            new AlertDialog.Builder(this)
-                .setTitle("New Wallet Created")
-                .setMessage("Recovery phrase (WRITE IT DOWN):\n\n" + m
-                    + "\n\nStore it safely. Never share it.")
-                .setPositiveButton("I Saved It", null)
-                .setCancelable(false)
-                .show();
+        try {
+            String m = SecurePrefs.generateMnemonic();
+            if (m != null && !m.isEmpty()) {
+                store.saveMnemonic(m);
+                new AlertDialog.Builder(this)
+                    .setTitle("New Wallet Created")
+                    .setMessage("Recovery phrase (WRITE IT DOWN):\n\n" + m
+                        + "\n\nStore it safely. Never share it.")
+                    .setPositiveButton("I Saved It", null)
+                    .setCancelable(false)
+                    .show();
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, "Wallet init error: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
