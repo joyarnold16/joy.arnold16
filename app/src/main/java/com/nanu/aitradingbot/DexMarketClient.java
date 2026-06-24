@@ -51,7 +51,7 @@ public class DexMarketClient {
                     StringBuilder sb = new StringBuilder();
                     for (String a : batch) { if (sb.length() > 0) sb.append(','); sb.append(a); }
                     try {
-                        JSONObject resp = httpGet(API + "/tokens/" + sb);
+                        JSONObject resp = httpGet(API + "/latest/dex/tokens/" + sb);
                         if (resp == null) continue;
                         JSONArray pairs = resp.optJSONArray("pairs");
                         if (pairs == null) continue;
@@ -126,7 +126,7 @@ public class DexMarketClient {
                     List<String> batch = addrList.subList(i, Math.min(i + 30, addrList.size()));
                     StringBuilder sb = new StringBuilder();
                     for (String a : batch) { if (sb.length() > 0) sb.append(','); sb.append(a); }
-                    String url = API + "/tokens/" + sb;
+                    String url = API + "/latest/dex/tokens/" + sb;
                     try {
                         JSONObject resp = httpGet(url);
                         if (resp == null) continue;
