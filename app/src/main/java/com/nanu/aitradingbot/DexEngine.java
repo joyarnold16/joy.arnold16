@@ -126,26 +126,43 @@ public class DexEngine {
             String block = DexSafetyPolicy.check(c, store);
             if (block != null) {
                 Log.d(TAG, "Queue skip (re-check blocked): " + c.symbol + " | " + block);
-                continue; // try next
+                continue;
             }
             if (alreadyOpen(c.tokenAddress)) continue;
 
-            openPosition(c);
+            // Algo entry filter
+            AlgoEngine.Signal sig = AlgoEngine.entrySignal(c);
+            if (!sig.isGoodEntry(store.minAlgoScore)) {
+                Log.d(TAG, "Queue skip (algo score " + sig.score + "<" + store.minAlgoScore + "): " + c.symbol);
+                continue;
+            }
+            c.algoSignal     = sig.type;
+            c.algoScore      = sig.score;
+            openPosition(c, sig);
         }
     }
 
     // ─ OPEN POSITION ─────────────────────────────────────────────
 
-    private void openPosition(DexCandidate c) {
+    private void openPosition(DexCandidate c, AlgoEngine.Signal sig) {
         if (store.liveMode) {
-            // Live: sign + broadcast, then record
             SwapEngine.buy(store, c, new SwapEngine.SwapCallback() {
                 @Override public void onSuccess(String txHash, double price) {
                     TradeRecord r = store.openPosition(c);
-                    r.buyTxHash = txHash;
-                    // Update history with txHash
+                    r.buyTxHash      = txHash;
+                    r.entryAlgoScore = sig.score;
+                    r.algoSignal     = sig.type;
+                    r.peakPrice      = price;
                     List<TradeRecord> hist = store.loadHistory();
-                    for (TradeRecord h : hist) if (r.id.equals(h.id)) { h.buyTxHash = txHash; break; }
+                    for (TradeRecord h : hist) {
+                        if (r.id.equals(h.id)) {
+                            h.buyTxHash      = txHash;
+                            h.entryAlgoScore = sig.score;
+                            h.algoSignal     = sig.type;
+                            h.peakPrice      = price;
+                            break;
+                        }
+                    }
                     store.saveHistory(hist);
                     DexEngine.this.notify(r);
                     BotEvolution.evolve(store);
@@ -156,8 +173,21 @@ public class DexEngine {
                 }
             });
         } else {
-            // Paper: record immediately
-            TradeRecord r = store.openPosition(c);
+            TradeRecord r    = store.openPosition(c);
+            r.entryAlgoScore = sig.score;
+            r.algoSignal     = sig.type;
+            r.peakPrice      = c.priceUsd;
+            // Persist algo fields
+            List<TradeRecord> hist = store.loadHistory();
+            for (TradeRecord h : hist) {
+                if (r.id.equals(h.id)) {
+                    h.entryAlgoScore = sig.score;
+                    h.algoSignal     = sig.type;
+                    h.peakPrice      = c.priceUsd;
+                    break;
+                }
+            }
+            store.saveHistory(hist);
             notify(r);
             BotEvolution.evolve(store);
         }
@@ -189,12 +219,27 @@ public class DexEngine {
                 if (current <= 0) continue;
 
                 double pct = (current - r.entryPrice) / r.entryPrice * 100.0;
-                long heldMs = System.currentTimeMillis() - r.openTimeMs;
-                long heldMin = heldMs / 60_000L;
+                long heldMin = (System.currentTimeMillis() - r.openTimeMs) / 60_000L;
+
+                // Update trailing peak price
+                if (store.useTrailingStop && current > r.peakPrice) {
+                    r.peakPrice = current;
+                    List<TradeRecord> hist = store.loadHistory();
+                    for (TradeRecord h : hist) if (r.id.equals(h.id)) { h.peakPrice = current; break; }
+                    store.saveHistory(hist);
+                }
+
+                // Trailing stop: exit if price drops trailingStopPct% below peak
+                double trailStop = store.useTrailingStop && r.peakPrice > r.entryPrice
+                    ? (r.peakPrice - current) / r.peakPrice * 100.0
+                    : -1;
 
                 String reason = null;
                 if (pct >= store.takeProfitPercent)
                     reason = "take_profit";
+                else if (store.useTrailingStop && trailStop >= store.trailingStopPct
+                         && r.peakPrice > r.entryPrice * 1.005)
+                    reason = "trailing_stop";
                 else if (pct <= -store.stopLossPercent)
                     reason = "stop_loss";
                 else if (heldMin >= store.maxHoldMinutes)

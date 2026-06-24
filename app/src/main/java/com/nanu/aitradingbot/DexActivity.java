@@ -422,11 +422,35 @@ public class DexActivity extends Activity {
         card.addView(top);
         card.addView(gap(4));
         tv2(card, "Entry $" + fmt8(r.entryPrice) + "  →  Exit $" + fmt8(r.exitPrice), 12, GREY, Typeface.NORMAL);
-        TextView pnl = tv2(card, String.format("P/L  %+.4f USD  (%+.2f%%)", r.pnlUsd, r.pnlPercent),
+        tv2(card, String.format("P/L  %+.4f USD  (%+.2f%%)", r.pnlUsd, r.pnlPercent),
             13, r.pnlUsd >= 0 ? GREEN : RED, Typeface.BOLD);
-        String reason = r.exitReason != null ? r.exitReason.replace('_', ' ') : "";
+
+        // Algo confidence row
+        LinearLayout algoRow = row(0, 4);
+        String entryLabel = r.entryAlgoScore > 0
+            ? "BUY " + r.entryAlgoScore + "% [" + (r.algoSignal.isEmpty() ? "SCALP" : r.algoSignal) + "]"
+            : "CONF " + r.confidenceScore;
+        String exitLabel = r.exitAlgoScore > 0
+            ? "SELL " + r.exitAlgoScore + "%"
+            : "";
+        TextView entryTag = tv(entryLabel, 11, 0xFF00E5FF);
+        entryTag.setPadding(dp(6), dp(3), dp(6), dp(3));
+        GradientDrawable etBg = new GradientDrawable(); etBg.setColor(0x2200E5FF); etBg.setCornerRadius(dp(6));
+        entryTag.setBackground(etBg);
+        algoRow.addView(entryTag);
+        if (!exitLabel.isEmpty()) {
+            algoRow.addView(tv(" → ", 11, GREY));
+            TextView exitTag = tv(exitLabel, 11, r.isWin ? GREEN : RED);
+            exitTag.setPadding(dp(6), dp(3), dp(6), dp(3));
+            GradientDrawable exBg = new GradientDrawable(); exBg.setColor(r.isWin ? 0x2200C853 : 0x22FF1744); exBg.setCornerRadius(dp(6));
+            exitTag.setBackground(exBg);
+            algoRow.addView(exitTag);
+        }
+        card.addView(algoRow);
+
+        String reason = r.exitReason != null ? r.exitReason.replace('_', ' ').toUpperCase() : "";
         String mode   = r.isLive ? " • LIVE" : " • paper";
-        tv2(card, "Exit: " + reason + mode + " | Conf: " + r.confidenceScore, 11, AMBER, Typeface.NORMAL);
+        tv2(card, reason + mode + " • " + r.strategyName, 10, AMBER, Typeface.NORMAL);
         if (r.buyTxHash != null && !r.buyTxHash.isEmpty())
             tv2(card, "Tx: " + r.buyTxHash.substring(0, Math.min(20, r.buyTxHash.length())) + "…",
                 10, GREY, Typeface.NORMAL);
@@ -475,7 +499,18 @@ public class DexActivity extends Activity {
         top.addView(conf);
         card.addView(top);
         card.addView(gap(4));
+        // Algo signal badge
+        if (r.entryAlgoScore > 0) {
+            String sigLabel = "ALGO " + r.entryAlgoScore + "% • " + (r.algoSignal.isEmpty() ? "SCALP" : r.algoSignal);
+            TextView sigTag = tv2(card, sigLabel, 11, 0xFF00E5FF, Typeface.BOLD);
+            sigTag.setPadding(0, dp(2), 0, dp(4));
+        }
         tv2(card, "Entry: $" + fmt8(r.entryPrice), 12, WHITE, Typeface.NORMAL);
+        // Trailing stop display
+        if (store.useTrailingStop && r.peakPrice > r.entryPrice * 1.001) {
+            double trailPrice = r.peakPrice * (1 - store.trailingStopPct / 100);
+            tv2(card, "Peak: $" + fmt8(r.peakPrice) + " | Trail SL: $" + fmt8(trailPrice), 11, AMBER, Typeface.NORMAL);
+        }
         tv2(card, "TP: +" + store.takeProfitPercent + "% = $" + fmt8(r.entryPrice * (1 + store.takeProfitPercent/100))
             + "  |  SL: -" + store.stopLossPercent + "% = $" + fmt8(r.entryPrice * (1 - store.stopLossPercent/100)),
             11, GREY, Typeface.NORMAL);
@@ -633,6 +668,47 @@ public class DexActivity extends Activity {
             }
         });
         stratCard.addView(stratSave);
+
+        // Algo Trading Settings
+        LinearLayout algoCard = card(p);
+        tv2(algoCard, "ALGO TRADING", 14, CYAN, Typeface.BOLD);
+        tv2(algoCard, "RSI, MACD-like signals and volume confirmation filter entries.\nTrailing stop locks in profit as price rises.",
+            11, GREY, Typeface.NORMAL);
+        algoCard.addView(gap(8));
+        EditText minAlgo = settingRow(algoCard, "Min algo score to enter (0–100)",
+            String.valueOf(store.minAlgoScore));
+        EditText trailPct = settingRow(algoCard, "Trailing stop distance (%)",
+            String.valueOf(store.trailingStopPct));
+        algoCard.addView(gap(4));
+        // Trailing stop toggle
+        LinearLayout trailRow = row(0, 0);
+        tv2(trailRow, "Trailing stop loss", 13, WHITE, Typeface.NORMAL).setLayoutParams(
+            new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        android.widget.Switch trailSwitch = new android.widget.Switch(this);
+        trailSwitch.setChecked(store.useTrailingStop);
+        trailSwitch.setOnCheckedChangeListener((b, checked) -> {
+            store.useTrailingStop = checked;
+            store.save();
+        });
+        trailRow.addView(trailSwitch);
+        algoCard.addView(trailRow);
+        algoCard.addView(gap(8));
+        // Algo signal info
+        double rsiEx = AlgoEngine.approximateRsi(2.5, 5.0);
+        tv2(algoCard, "Example: RSI≈" + (int)rsiEx + " at +2.5% 1h / +5% 24h", 10, GREY, Typeface.NORMAL);
+        algoCard.addView(gap(4));
+        Button algoSave = bigBtn("Save Algo Settings", CYAN);
+        algoSave.setOnClickListener(v -> {
+            try {
+                store.minAlgoScore    = Integer.parseInt(minAlgo.getText().toString());
+                store.trailingStopPct = Double.parseDouble(trailPct.getText().toString());
+                store.save();
+                Toast.makeText(this, "Algo settings saved", Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                Toast.makeText(this, "Invalid input", Toast.LENGTH_SHORT).show();
+            }
+        });
+        algoCard.addView(algoSave);
 
         // Telegram
         LinearLayout tgCard = card(p);
@@ -925,10 +1001,13 @@ public class DexActivity extends Activity {
     }
 
     private View statusBadge(DexCandidate c) {
-        String label = c.status + " " + c.score;
+        // Show algo score if available, otherwise safety score
+        String scoreStr = c.algoScore > 0
+            ? c.status + " " + c.score + " | ALGO " + c.algoScore + "%"
+            : c.status + " " + c.score;
         int color = "QUALIFIED".equals(c.status) ? GREEN
             : "BLOCKED".equals(c.status) ? RED : AMBER;
-        TextView t = tv(label, 11, Color.BLACK);
+        TextView t = tv(scoreStr, 11, Color.BLACK);
         t.setTypeface(null, Typeface.BOLD);
         t.setPadding(dp(8), dp(4), dp(8), dp(4));
         GradientDrawable bg = new GradientDrawable();

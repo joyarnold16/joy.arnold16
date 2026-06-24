@@ -25,6 +25,11 @@ public class DexAppStore {
     public int    scanIntervalMin     = 5;
     public int    maxHoldMinutes      = 15;
 
+    // Algo trading settings
+    public int     minAlgoScore      = 55;   // minimum AlgoEngine score to enter (0–100)
+    public boolean useTrailingStop   = true;  // trail stop loss as price rises
+    public double  trailingStopPct   = 1.0;  // trail distance below peak price (%)
+
     // Live mode (off by default — paper first)
     public boolean liveMode     = false;
     public boolean liveChainBnb = false;
@@ -68,10 +73,13 @@ public class DexAppStore {
             .putInt("maxPos",       maxPositions)
             .putInt("scanMin",      scanIntervalMin)
             .putInt("maxHold",      maxHoldMinutes)
-            .putBoolean("liveMode",  liveMode)
-            .putBoolean("liveBnb",   liveChainBnb)
-            .putBoolean("liveSol",   liveChainSol)
-            .putFloat("tradeAmt",   (float) tradeAmountUsd)
+            .putInt("minAlgoScore",    minAlgoScore)
+            .putBoolean("trailStop",   useTrailingStop)
+            .putFloat("trailPct",     (float) trailingStopPct)
+            .putBoolean("liveMode",    liveMode)
+            .putBoolean("liveBnb",     liveChainBnb)
+            .putBoolean("liveSol",     liveChainSol)
+            .putFloat("tradeAmt",     (float) tradeAmountUsd)
             .putString("tgToken",   telegramToken)
             .putString("tgChat",    telegramChatId)
             .putString("mlStrat",   mlStrategy)
@@ -96,10 +104,13 @@ public class DexAppStore {
         maxPositions       = prefs.getInt("maxPos",     3);
         scanIntervalMin    = prefs.getInt("scanMin",    5);
         maxHoldMinutes     = prefs.getInt("maxHold",    15);
-        liveMode           = prefs.getBoolean("liveMode", false);
-        liveChainBnb       = prefs.getBoolean("liveBnb",  false);
-        liveChainSol       = prefs.getBoolean("liveSol",  false);
-        tradeAmountUsd     = prefs.getFloat("tradeAmt",  0f);
+        minAlgoScore       = prefs.getInt("minAlgoScore",   55);
+        useTrailingStop    = prefs.getBoolean("trailStop",   true);
+        trailingStopPct    = prefs.getFloat("trailPct",      1.0f);
+        liveMode           = prefs.getBoolean("liveMode",   false);
+        liveChainBnb       = prefs.getBoolean("liveBnb",    false);
+        liveChainSol       = prefs.getBoolean("liveSol",    false);
+        tradeAmountUsd     = prefs.getFloat("tradeAmt",     0f);
         telegramToken      = prefs.getString("tgToken",  "");
         telegramChatId     = prefs.getString("tgChat",   "");
         mlStrategy         = prefs.getString("mlStrat",  "BALANCED");
@@ -149,9 +160,13 @@ public class DexAppStore {
                 r.exitReason    = o.optString("reason");
                 r.strategyName  = o.optString("strat");
                 r.confidenceScore = o.optInt("conf");
-                r.isLive        = o.optBoolean("live");
-                r.buyTxHash     = o.optString("buyTx", "");
-                r.sellTxHash    = o.optString("sellTx", "");
+                r.isLive         = o.optBoolean("live");
+                r.buyTxHash      = o.optString("buyTx",  "");
+                r.sellTxHash     = o.optString("sellTx", "");
+                r.entryAlgoScore = o.optInt("algoEntry", 0);
+                r.exitAlgoScore  = o.optInt("algoExit",  0);
+                r.algoSignal     = o.optString("algoSig", "");
+                r.peakPrice      = o.optDouble("peak",   0);
                 list.add(r);
             }
         } catch (Exception ignored) {}
@@ -180,9 +195,13 @@ public class DexAppStore {
                 o.put("reason",r.exitReason);
                 o.put("strat", r.strategyName);
                 o.put("conf",  r.confidenceScore);
-                o.put("live",  r.isLive);
-                o.put("buyTx", r.buyTxHash);
-                o.put("sellTx",r.sellTxHash);
+                o.put("live",     r.isLive);
+                o.put("buyTx",    r.buyTxHash);
+                o.put("sellTx",   r.sellTxHash);
+                o.put("algoEntry",r.entryAlgoScore);
+                o.put("algoExit", r.exitAlgoScore);
+                o.put("algoSig",  r.algoSignal);
+                o.put("peak",     r.peakPrice);
                 arr.put(o);
             }
             prefs.edit().putString("trades", arr.toString()).apply();
@@ -199,11 +218,12 @@ public class DexAppStore {
         r.entryPrice    = c.priceUsd;
         r.openTimeMs    = System.currentTimeMillis();
         r.isOpen        = true;
-        r.strategyName  = mlStrategy;
+        r.strategyName    = mlStrategy;
         r.confidenceScore = c.score;
-        r.patterns      = new ArrayList<>(c.patterns);
-        r.amountUsd     = liveMode ? tradeAmountUsd : 10.0;
-        r.isLive        = liveMode;
+        r.patterns        = new ArrayList<>(c.patterns);
+        r.amountUsd       = liveMode ? tradeAmountUsd : 10.0;
+        r.isLive          = liveMode;
+        r.peakPrice       = c.priceUsd;
         List<TradeRecord> list = loadHistory();
         list.add(0, r);
         if (list.size() > 500) list = list.subList(0, 500);

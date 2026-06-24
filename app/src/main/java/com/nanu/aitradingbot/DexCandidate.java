@@ -21,5 +21,8 @@ public class DexCandidate {
     public String status;          // QUALIFIED / WATCHING / BLOCKED
     public String blockReason;
     public List<String> patterns = new ArrayList<>();
-    public long discoveredAtMs = System.currentTimeMillis();
+    public long   discoveredAtMs = System.currentTimeMillis();
+    // Algo fields (set by AlgoEngine during queue drain)
+    public int    algoScore  = 0;
+    public String algoSignal = "";
 }
