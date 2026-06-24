@@ -6,6 +6,7 @@
         </shape>
     </item>
     <item>
-        <bitmap android:src="@drawable/nanu_mascot" android:gravity="center"/>
+        <bitmap android:src="@drawable/nanu_mascot"
+            android:gravity="fill_horizontal|top"/>
     </item>
 </layer-list>

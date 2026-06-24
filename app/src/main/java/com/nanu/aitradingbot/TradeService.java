@@ -17,7 +17,7 @@ import java.util.List;
 
 public class TradeService extends Service {
     private static final String TAG = "TradeService";
-    public  static final String CHANNEL_TRADE  = "nanu_trades";
+    public  static final String CHANNEL_TRADE  = "nanu_trades_v2"; // v2: sound+vibration enabled
     public  static final String CHANNEL_STATUS = "nanu_status";
     private static final int    NOTIF_ID       = 1001;
     private static final long   STATUS_INTERVAL_MS = 60_000L;
@@ -225,13 +225,28 @@ public class TradeService extends Service {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
         NotificationManager nm = getSystemService(NotificationManager.class);
         if (nm == null) return;
+
+        // Trade alert channel: sound + vibration + cyan LED
         NotificationChannel trade = new NotificationChannel(
             CHANNEL_TRADE, "Trade Alerts", NotificationManager.IMPORTANCE_HIGH);
-        trade.setDescription("Fires when a trade is opened or closed");
+        trade.setDescription("Sound alert when a trade opens or closes");
+        trade.setSound(
+            android.provider.Settings.System.DEFAULT_NOTIFICATION_URI,
+            new android.media.AudioAttributes.Builder()
+                .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_EVENT)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build());
+        trade.enableVibration(true);
+        trade.setVibrationPattern(new long[]{0, 200, 100, 200});
+        trade.enableLights(true);
+        trade.setLightColor(0xFF00E5FF); // cyan
         nm.createNotificationChannel(trade);
+
+        // Status channel: silent persistent notification
         NotificationChannel status = new NotificationChannel(
             CHANNEL_STATUS, "Bot Status", NotificationManager.IMPORTANCE_LOW);
         status.setDescription("Persistent background scanner notification");
+        status.setSound(null, null);
         nm.createNotificationChannel(status);
     }
 
