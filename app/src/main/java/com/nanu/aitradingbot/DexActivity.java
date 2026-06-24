@@ -41,7 +41,6 @@ public class DexActivity extends Activity {
 
     // —— State —————————————————————————————————————————
     private DexAppStore store;
-    private DexEngine engine;
     private Handler ui;
     private int tab = 0;
     private ScrollView[] tabViews;
@@ -67,9 +66,6 @@ public class DexActivity extends Activity {
 
             if (!store.hasWallet()) createWallet();
 
-            engine = new DexEngine(this, store);
-            engine.setListener(engineListener);
-
             buildRoot();
             showTab(0);
         } catch (Throwable e) {
@@ -85,10 +81,18 @@ public class DexActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        store.reload();
+        TradeService.uiListener = engineListener;
         refreshCurrentTab();
     }
 
+    @Override protected void onPause() {
+        super.onPause();
+        TradeService.uiListener = null;
+    }
+
     @Override protected void onDestroy() {
+        TradeService.uiListener = null;
         super.onDestroy();
     }
 
@@ -277,8 +281,8 @@ public class DexActivity extends Activity {
         View spacer = new View(this);
         spacer.setLayoutParams(new LinearLayout.LayoutParams(0, 0, 1f));
         sHead.addView(spacer);
-        TextView scanStatus = tv(engine.isRunning() ? "SCANNING" : "IDLE", 12,
-            engine.isRunning() ? AMBER : GREY);
+        TextView scanStatus = tv(TradeService.active ? "SCANNING" : "IDLE", 12,
+            TradeService.active ? AMBER : GREY);
         scanStatus.setTypeface(null, Typeface.BOLD);
         sHead.addView(scanStatus);
         sCard.addView(sHead);
@@ -296,7 +300,7 @@ public class DexActivity extends Activity {
         LinearLayout btns = row(0, 0);
         btns.addView(btn("Start", GREEN, v -> startEngine()));
         btns.addView(gap(8));
-        btns.addView(btn("Pause", AMBER, v -> engine.stop()));
+        btns.addView(btn("Pause", AMBER, v -> { TradeService.stop(this); buildHome(); }));
         btns.addView(gap(8));
         btns.addView(btn("Panic", RED, v -> panicClose()));
         sCard.addView(btns);
@@ -381,8 +385,8 @@ public class DexActivity extends Activity {
 
         bothBtn.setOnClickListener(v -> {
             bothBtn.setText("Scanning…"); bothBtn.setEnabled(false);
-            engine.triggerScanNow();
-            ui.postDelayed(() -> { bothBtn.setText("Scan Both"); bothBtn.setEnabled(true); }, 15_000);
+            TradeService.triggerScan(this);
+            ui.postDelayed(() -> { bothBtn.setText("Scan Both"); bothBtn.setEnabled(true); buildDiscover(); }, 20_000);
         });
 
         scanBtns.addView(bnbBtn);
@@ -1026,12 +1030,15 @@ public class DexActivity extends Activity {
         }
         @Override public void onScanResult(List<DexCandidate> c) {
             lastCandidates = c;
+            store.reload();
             ui.post(() -> refreshCurrentTab());
         }
         @Override public void onPositionOpened(TradeRecord r) {
+            store.reload();
             ui.post(() -> { if (tab == 0 || tab == 3) refreshCurrentTab(); });
         }
         @Override public void onPositionClosed(TradeRecord r) {
+            store.reload();
             ui.post(() -> refreshCurrentTab());
         }
         @Override public void onError(String msg) {
@@ -1045,15 +1052,14 @@ public class DexActivity extends Activity {
 
     private void startEngine() {
         TradeService.start(this);
-        engine.start();
+        buildHome();
     }
 
     private void panicClose() {
         new AlertDialog.Builder(this)
-            .setTitle("🚨 PANIC CLOSE")
+            .setTitle("PANIC CLOSE")
             .setMessage("Close ALL open positions immediately at current price?")
             .setPositiveButton("Yes, close all", (d, w) -> {
-                engine.panicClose();
                 TradeService.panic(this);
                 Toast.makeText(this, "All positions closed", Toast.LENGTH_SHORT).show();
             })

@@ -54,6 +54,9 @@ public class DexAppStore {
     public int    mlGeneration = 0;
     public double mlWinRate    = 0;
 
+    // Bot running state (persisted for boot-restart)
+    public boolean botRunning = false;
+
     // Stats
     public int    totalTrades = 0;
     public int    totalWins   = 0;
@@ -104,6 +107,7 @@ public class DexAppStore {
             .putFloat("totalPnl",   (float) totalPnlUsd)
             .putInt("tradesToday",  tradesToday)
             .putLong("lastDay",     lastTradeDay)
+            .putBoolean("botRunning", botRunning)
             .apply();
     }
 
@@ -140,7 +144,10 @@ public class DexAppStore {
         totalPnlUsd        = prefs.getFloat("totalPnl", 0f);
         tradesToday        = prefs.getInt("tradesToday",0);
         lastTradeDay       = prefs.getLong("lastDay",   0L);
+        botRunning         = prefs.getBoolean("botRunning", false);
     }
+
+    public void reload() { load(); }
 
     public String getMnemonic()             { return secure.loadMnemonic(); }
     public boolean hasWallet()              { return !bnbAddress.isEmpty(); }
