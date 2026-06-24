@@ -727,14 +727,22 @@ public class DexActivity extends Activity {
         autoTitle.setTypeface(null, Typeface.BOLD);
         autoTitle.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         autoHead.addView(autoTitle);
-        android.widget.Switch autoSwitch = new android.widget.Switch(this);
-        autoSwitch.setChecked(store.autoMode);
-        autoSwitch.setOnCheckedChangeListener((b, checked) -> {
-            store.autoMode = checked;
+        Button autoToggle = new Button(this);
+        autoToggle.setText(store.autoMode ? "ON" : "OFF");
+        autoToggle.setTextColor(Color.BLACK);
+        autoToggle.setTypeface(null, Typeface.BOLD);
+        GradientDrawable atBg = new GradientDrawable();
+        atBg.setColor(store.autoMode ? PURPLE : GREY);
+        atBg.setCornerRadius(dp(20));
+        autoToggle.setBackground(atBg);
+        LinearLayout.LayoutParams atLp = new LinearLayout.LayoutParams(dp(72), dp(36));
+        autoToggle.setLayoutParams(atLp);
+        autoToggle.setOnClickListener(v -> {
+            store.autoMode = !store.autoMode;
             store.save();
             buildControl();
         });
-        autoHead.addView(autoSwitch);
+        autoHead.addView(autoToggle);
         autoCard.addView(autoHead);
         autoCard.addView(gap(6));
 
@@ -912,10 +920,21 @@ public class DexActivity extends Activity {
             LinearLayout trailRow = row(0, 0);
             TextView trailLabel = tv2(trailRow, "Trailing stop loss", 13, WHITE, Typeface.NORMAL);
             trailLabel.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-            android.widget.Switch trailSwitch = new android.widget.Switch(this);
-            trailSwitch.setChecked(store.useTrailingStop);
-            trailSwitch.setOnCheckedChangeListener((b, checked) -> { store.useTrailingStop = checked; store.save(); });
-            trailRow.addView(trailSwitch);
+            Button trailToggle = new Button(this);
+            trailToggle.setText(store.useTrailingStop ? "ON" : "OFF");
+            trailToggle.setTextColor(Color.BLACK);
+            trailToggle.setTypeface(null, Typeface.BOLD);
+            GradientDrawable ttBg = new GradientDrawable();
+            ttBg.setColor(store.useTrailingStop ? GREEN : GREY);
+            ttBg.setCornerRadius(dp(20));
+            trailToggle.setBackground(ttBg);
+            trailToggle.setLayoutParams(new LinearLayout.LayoutParams(dp(72), dp(36)));
+            trailToggle.setOnClickListener(v -> {
+                store.useTrailingStop = !store.useTrailingStop;
+                store.save();
+                buildControl();
+            });
+            trailRow.addView(trailToggle);
             algoCard.addView(trailRow);
             algoCard.addView(gap(8));
             double rsiEx = AlgoEngine.approximateRsi(2.5, 5.0);
