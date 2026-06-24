@@ -66,6 +66,14 @@ public class DexActivity extends Activity {
 
             if (!store.hasWallet()) createWallet();
 
+            // Request notification permission on Android 13+
+            if (Build.VERSION.SDK_INT >= 33) {
+                if (checkSelfPermission("android.permission.POST_NOTIFICATIONS")
+                        != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 100);
+                }
+            }
+
             buildRoot();
             showTab(0);
         } catch (Throwable e) {
@@ -398,8 +406,22 @@ public class DexActivity extends Activity {
 
         if (lastCandidates.isEmpty()) {
             LinearLayout empty = card(p);
-            tv2(empty, "No results yet. Tap Scan Now.", 13, GREY, Typeface.NORMAL);
+            if (TradeService.active) {
+                tv2(empty, "Scanning in progress…", 13, AMBER, Typeface.BOLD);
+                tv2(empty, "First scan takes 1–2 minutes. Results appear automatically when complete.", 12, GREY, Typeface.NORMAL);
+            } else {
+                tv2(empty, "No results yet. Tap a Scan button above or Start the bot from Home.", 13, GREY, Typeface.NORMAL);
+            }
         } else {
+            int bnbC = 0, solC = 0, qual = 0;
+            for (DexCandidate c : lastCandidates) {
+                if ("bsc".equals(c.chain)) bnbC++; else solC++;
+                if ("QUALIFIED".equals(c.status)) qual++;
+            }
+            LinearLayout summary = card(p);
+            summary.setBackgroundResource(0);
+            tv2(summary, lastCandidates.size() + " tokens found  •  " + bnbC + " BNB  •  " + solC + " SOL  •  " + qual + " QUALIFIED",
+                12, CYAN, Typeface.BOLD);
             for (DexCandidate c : lastCandidates) {
                 candidateCard(p, c);
             }
@@ -812,6 +834,10 @@ public class DexActivity extends Activity {
         EditText maxPos  = infoRow(scanCard, "Max simultaneous positions",
             String.valueOf(store.maxPositions),
             "Maximum number of open paper positions at once. Prevents over-exposure.");
+        EditText maxTok  = infoRow(scanCard, "Max tokens to scan per cycle",
+            String.valueOf(store.maxScanTokens),
+            "How many token addresses the bot fetches from DEX Screener each scan cycle. "
+            + "Higher = more opportunities found but slower scan. Default 30, max 90.");
         EditText maxDaily = infoRow(scanCard, "Max trades per day",
             String.valueOf(store.maxDailyTrades),
             "Maximum number of trades the bot opens in one day. Resets at midnight. "
@@ -825,6 +851,8 @@ public class DexActivity extends Activity {
                 store.minPairAgeHours   = Integer.parseInt(minAge.getText().toString());
                 store.minMomentumPercent = Double.parseDouble(minMom.getText().toString());
                 store.maxPositions      = Integer.parseInt(maxPos.getText().toString());
+                int tok = Integer.parseInt(maxTok.getText().toString());
+                store.maxScanTokens     = Math.min(90, Math.max(5, tok));
                 int daily = Integer.parseInt(maxDaily.getText().toString());
                 store.maxDailyTrades    = daily <= 0 ? Integer.MAX_VALUE : daily;
                 store.save();

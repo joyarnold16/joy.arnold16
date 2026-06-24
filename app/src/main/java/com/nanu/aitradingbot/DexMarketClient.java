@@ -15,7 +15,6 @@ import java.util.Set;
 public class DexMarketClient {
     private static final String TAG = "DexMarket";
     private static final String API = "https://api.dexscreener.com";
-    private static final int MAX_ADDR = 30;
 
     public interface Callback {
         void onResult(List<DexCandidate> candidates);
@@ -34,11 +33,11 @@ public class DexMarketClient {
         new Thread(() -> {
             try {
                 Set<String> addresses = new LinkedHashSet<>();
-                collectChainAddresses(API + "/token-profiles/latest/v1", chain, addresses, MAX_ADDR);
+                collectChainAddresses(API + "/token-profiles/latest/v1", chain, addresses, store.maxScanTokens);
                 if (addresses.size() < 5)
-                    collectChainAddresses(API + "/token-boosts/top/v1", chain, addresses, MAX_ADDR);
+                    collectChainAddresses(API + "/token-boosts/top/v1", chain, addresses, store.maxScanTokens);
                 if (addresses.size() < 5)
-                    collectChainAddresses(API + "/token-boosts/active/v1", chain, addresses, MAX_ADDR);
+                    collectChainAddresses(API + "/token-boosts/active/v1", chain, addresses, store.maxScanTokens);
 
                 if (addresses.isEmpty()) {
                     callback.onError("No " + chain + " tokens found");
@@ -109,11 +108,11 @@ public class DexMarketClient {
         new Thread(() -> {
             try {
                 Set<String> addresses = new LinkedHashSet<>();
-                collectAddresses(API + "/token-profiles/latest/v1", addresses, MAX_ADDR);
+                collectAddresses(API + "/token-profiles/latest/v1", addresses, store.maxScanTokens);
                 if (addresses.size() < 5)
-                    collectAddresses(API + "/token-boosts/top/v1", addresses, MAX_ADDR);
+                    collectAddresses(API + "/token-boosts/top/v1", addresses, store.maxScanTokens);
                 if (addresses.size() < 5)
-                    collectAddresses(API + "/token-boosts/active/v1", addresses, MAX_ADDR);
+                    collectAddresses(API + "/token-boosts/active/v1", addresses, store.maxScanTokens);
 
                 if (addresses.isEmpty()) {
                     callback.onError("No token addresses found from DEX Screener");

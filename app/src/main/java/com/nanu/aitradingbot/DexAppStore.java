@@ -23,6 +23,7 @@ public class DexAppStore {
     public int    minPairAgeHours     = 0;
     public int    maxPositions        = 3;
     public int    maxDailyTrades      = 10;
+    public int    maxScanTokens       = 30;
     public int    scanIntervalMin     = 5;
     public int    maxHoldMinutes      = 15;
 
@@ -84,6 +85,7 @@ public class DexAppStore {
             .putInt("minAge",       minPairAgeHours)
             .putInt("maxPos",       maxPositions)
             .putInt("maxDaily",     maxDailyTrades)
+            .putInt("maxScanTok",   maxScanTokens)
             .putBoolean("autoMode", autoMode)
             .putInt("scanMin",      scanIntervalMin)
             .putInt("maxHold",      maxHoldMinutes)
@@ -121,6 +123,7 @@ public class DexAppStore {
         minPairAgeHours    = prefs.getInt("minAge",     0);
         maxPositions       = prefs.getInt("maxPos",     3);
         maxDailyTrades     = prefs.getInt("maxDaily",   10);
+        maxScanTokens      = prefs.getInt("maxScanTok", 30);
         autoMode           = prefs.getBoolean("autoMode", false);
         scanIntervalMin    = prefs.getInt("scanMin",    5);
         maxHoldMinutes     = prefs.getInt("maxHold",    15);
