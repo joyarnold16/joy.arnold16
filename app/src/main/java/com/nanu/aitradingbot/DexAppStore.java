@@ -32,11 +32,6 @@ public class DexAppStore {
     public boolean useTrailingStop   = true;
     public double  trailingStopPct   = 1.0;
 
-    // Take-profit targets (manual override, ML may evolve these)
-    public double tp1Percent = 2.0;
-    public double tp2Percent = 4.0;
-    public double tp3Percent = 8.0;
-
     // Auto Mode: ML controls all params; manual overrides locked
     public boolean autoMode     = false;
 
@@ -92,9 +87,6 @@ public class DexAppStore {
             .putInt("minAlgoScore",    minAlgoScore)
             .putBoolean("trailStop",   useTrailingStop)
             .putFloat("trailPct",     (float) trailingStopPct)
-            .putFloat("tp1",          (float) tp1Percent)
-            .putFloat("tp2",          (float) tp2Percent)
-            .putFloat("tp3",          (float) tp3Percent)
             .putBoolean("liveMode",    liveMode)
             .putBoolean("liveBnb",     liveChainBnb)
             .putBoolean("liveSol",     liveChainSol)
@@ -130,9 +122,6 @@ public class DexAppStore {
         minAlgoScore       = prefs.getInt("minAlgoScore",   55);
         useTrailingStop    = prefs.getBoolean("trailStop",   true);
         trailingStopPct    = prefs.getFloat("trailPct",      1.0f);
-        tp1Percent         = prefs.getFloat("tp1",           2.0f);
-        tp2Percent         = prefs.getFloat("tp2",           4.0f);
-        tp3Percent         = prefs.getFloat("tp3",           8.0f);
         liveMode           = prefs.getBoolean("liveMode",   false);
         liveChainBnb       = prefs.getBoolean("liveBnb",    false);
         liveChainSol       = prefs.getBoolean("liveSol",    false);

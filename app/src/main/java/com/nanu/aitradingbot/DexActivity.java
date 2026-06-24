@@ -899,32 +899,6 @@ public class DexActivity extends Activity {
             stratCard.addView(stratSave);
         }
 
-        // TP Targets
-        LinearLayout tpCard = card(p);
-        tv2(tpCard, "TAKE-PROFIT TARGETS", 14, CYAN, Typeface.BOLD);
-        tv2(tpCard, "Set 3 profit targets manually. Bot shows these on position cards for reference.", 11, GREY, Typeface.NORMAL);
-        tpCard.addView(gap(8));
-        EditText tp1 = infoRow(tpCard, "Target 1 (%)", String.valueOf(store.tp1Percent),
-            "First take-profit target. Consider closing 1/3 of position here.");
-        EditText tp2 = infoRow(tpCard, "Target 2 (%)", String.valueOf(store.tp2Percent),
-            "Second take-profit target. Consider closing another 1/3 here.");
-        EditText tp3 = infoRow(tpCard, "Target 3 (%)", String.valueOf(store.tp3Percent),
-            "Third take-profit target (moon target). Let the last 1/3 ride.");
-        tpCard.addView(gap(8));
-        Button tpSave = bigBtn("Save TP Targets", CYAN);
-        tpSave.setOnClickListener(v -> {
-            try {
-                store.tp1Percent = Double.parseDouble(tp1.getText().toString());
-                store.tp2Percent = Double.parseDouble(tp2.getText().toString());
-                store.tp3Percent = Double.parseDouble(tp3.getText().toString());
-                store.save();
-                Toast.makeText(this, "TP targets saved", Toast.LENGTH_SHORT).show();
-            } catch (Exception e) {
-                Toast.makeText(this, "Invalid input", Toast.LENGTH_SHORT).show();
-            }
-        });
-        tpCard.addView(tpSave);
-
         // Algo Trading Settings
         LinearLayout algoCard = card(p);
         tv2(algoCard, "ALGO TRADING", 14, store.autoMode ? GREY : CYAN, Typeface.BOLD);
