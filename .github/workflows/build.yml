@@ -49,17 +49,18 @@ jobs:
         env:
           BUILD_TOOLS_VERSION: "34.0.0"
 
-      - name: Upload signed APK
+      - name: Upload Signed APK
         if: steps.sign_app.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: nanu-ai-v11-signed
+          name: nanu-ai-v11-SIGNED
           path: ${{ steps.sign_app.outputs.signedReleaseFile }}
           retention-days: 30
 
-      - name: Upload APK
+      - name: Upload Unsigned APK (fallback - not installable)
+        if: steps.sign_app.outcome != 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: nanu-ai-v11
+          name: nanu-ai-v11-UNSIGNED-add-secrets-to-sign
           path: app/build/outputs/apk/release/*.apk
           retention-days: 30
