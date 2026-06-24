@@ -94,11 +94,7 @@ public class DexActivity extends Activity {
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        com.journeyapps.barcodescanner.IntentResult result =
-            com.journeyapps.barcodescanner.IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
-        if (result != null && result.getContents() != null && withdrawAddressField != null) {
-            withdrawAddressField.setText(result.getContents());
-        }
+        // QR scanner result handled here when scanner library is added
     }
 
     // —— Wallet ———————————————————————————————————————
@@ -612,14 +608,9 @@ public class DexActivity extends Activity {
         EditText amount = input(wdCard, "Amount");
         amount.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         wdCard.addView(gap(4));
-        Button qrScanBtn = bigBtn("Scan QR Address", CARD);
-        qrScanBtn.setOnClickListener(v -> {
-            new com.journeyapps.barcodescanner.IntentIntegrator(this)
-                .setDesiredBarcodeFormats(com.journeyapps.barcodescanner.IntentIntegrator.QR_CODE)
-                .setPrompt("Scan destination wallet QR code")
-                .setBeepEnabled(false)
-                .initiateScan();
-        });
+        Button qrScanBtn = bigBtn("Scan QR Address (coming soon)", CARD);
+        qrScanBtn.setOnClickListener(v ->
+            Toast.makeText(this, "QR scanner will be added in next update", Toast.LENGTH_SHORT).show());
         wdCard.addView(qrScanBtn);
         wdCard.addView(gap(8));
         Button wdBtn = bigBtn(store.liveMode ? "Withdraw" : "Signing not yet active", GREY);
