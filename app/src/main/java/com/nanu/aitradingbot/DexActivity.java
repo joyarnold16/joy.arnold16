@@ -217,10 +217,32 @@ public class DexActivity extends Activity {
         if (mascotId != 0) {
             ImageView img = new ImageView(this);
             img.setImageResource(mascotId);
-            img.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            img.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            img.setBackgroundColor(BG);
             img.setLayoutParams(new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(180)));
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(240)));
             p.addView(img);
+        }
+
+        // Auto Mode banner
+        if (store.autoMode) {
+            LinearLayout autoBanner = new LinearLayout(this);
+            autoBanner.setOrientation(LinearLayout.HORIZONTAL);
+            autoBanner.setGravity(Gravity.CENTER);
+            autoBanner.setPadding(dp(12), dp(8), dp(12), dp(8));
+            GradientDrawable ab = new GradientDrawable();
+            ab.setColor(0xFF1A1040); ab.setCornerRadius(dp(8));
+            ab.setStroke(dp(1), PURPLE);
+            autoBanner.setBackground(ab);
+            LinearLayout.LayoutParams abLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            abLp.setMargins(0, 0, 0, dp(8));
+            autoBanner.setLayoutParams(abLp);
+            TextView autoTv = tv("AUTO MODE  •  ML is fully in control of all trade decisions", 12, PURPLE);
+            autoTv.setTypeface(null, Typeface.BOLD);
+            autoTv.setGravity(Gravity.CENTER);
+            autoBanner.addView(autoTv);
+            p.addView(autoBanner);
         }
 
         // Wallet card
@@ -241,7 +263,7 @@ public class DexActivity extends Activity {
         LinearLayout stats = row(0, 0);
         stats.addView(statBox("MODE", store.liveMode ? "LIVE" : "PAPER",
             store.liveMode ? GREEN : AMBER));
-        stats.addView(statBox("TRADES", store.tradesToday + "/" + store.totalTrades, CYAN));
+        stats.addView(statBox("TODAY", store.tradesToday + "/" + store.maxDailyTrades, CYAN));
         stats.addView(statBox("PAPER P/L",
             String.format("%+.2f", store.totalPnlUsd),
             store.totalPnlUsd >= 0 ? GREEN : RED));
@@ -304,7 +326,8 @@ public class DexActivity extends Activity {
         // Footer
         p.addView(gap(8));
         String mode = store.liveMode ? "Live Mode" : "Paper Mode";
-        tv2(p, "NANU AI • BNB + SOL • ML Evolution • " + mode + " • v11.0",
+        String modeTag = store.autoMode ? "Auto Mode" : "Manual Mode";
+        tv2(p, "NANU AI • BNB + SOL • ML Evolution • " + mode + " • " + modeTag + " • v11.1",
             11, GREY, Typeface.NORMAL).setGravity(Gravity.CENTER);
         set(p);
     }
@@ -687,6 +710,51 @@ public class DexActivity extends Activity {
     private void buildControl() {
         LinearLayout p = page();
 
+        // ── AUTO MODE CARD ─────────────────────────────────────────────
+        LinearLayout autoCard = card(p);
+        GradientDrawable autoBg = new GradientDrawable();
+        autoBg.setColor(store.autoMode ? 0xFF1A1040 : CARD);
+        autoBg.setCornerRadius(dp(12));
+        autoBg.setStroke(dp(1), store.autoMode ? PURPLE : 0xFF30363D);
+        autoCard.setBackground(autoBg);
+
+        LinearLayout autoHead = row(0, 0);
+        TextView autoTitle = tv("AUTO MODE", 16, store.autoMode ? PURPLE : WHITE);
+        autoTitle.setTypeface(null, Typeface.BOLD);
+        autoTitle.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        autoHead.addView(autoTitle);
+        android.widget.Switch autoSwitch = new android.widget.Switch(this);
+        autoSwitch.setChecked(store.autoMode);
+        autoSwitch.setOnCheckedChangeListener((b, checked) -> {
+            store.autoMode = checked;
+            store.save();
+            buildControl();
+        });
+        autoHead.addView(autoSwitch);
+        autoCard.addView(autoHead);
+        autoCard.addView(gap(6));
+
+        if (store.autoMode) {
+            tv2(autoCard, "ACTIVE — ML is fully in control", 13, PURPLE, Typeface.BOLD);
+            tv2(autoCard, "The bot reads all market signals and decides entry, exit, SL, TP, "
+                + "and hold time on its own. Everything it learns in paper mode carries over to live mode. "
+                + "Manual overrides for SL/TP are locked.", 11, GREY, Typeface.NORMAL);
+            autoCard.addView(gap(6));
+            tv2(autoCard, "Current ML params (auto-managed):", 11, CYAN, Typeface.BOLD);
+            tv2(autoCard, "Strategy: " + store.mlStrategy
+                + "  |  Gen: " + store.mlGeneration
+                + "  |  WR: " + String.format("%.0f%%", store.mlWinRate), 11, WHITE, Typeface.NORMAL);
+            tv2(autoCard, "SL: " + store.stopLossPercent + "%"
+                + "  |  TP: " + store.takeProfitPercent + "%"
+                + "  |  Hold: " + store.maxHoldMinutes + "min"
+                + "  |  AlgoMin: " + store.minAlgoScore, 11, WHITE, Typeface.NORMAL);
+        } else {
+            tv2(autoCard, "DISABLED — Manual mode active", 13, GREY, Typeface.NORMAL);
+            tv2(autoCard, "Enable to let the ML bot decide all trade parameters automatically. "
+                + "It evolves with every closed trade in paper mode and the same learned strategy "
+                + "applies seamlessly when you switch to live mode.", 11, GREY, Typeface.NORMAL);
+        }
+
         // ML Evolution Status Card
         LinearLayout mlCard = card(p);
         tv2(mlCard, "ML EVOLUTION STATUS", 14, PURPLE, Typeface.BOLD);
@@ -732,6 +800,10 @@ public class DexActivity extends Activity {
         EditText maxPos  = infoRow(scanCard, "Max simultaneous positions",
             String.valueOf(store.maxPositions),
             "Maximum number of open paper positions at once. Prevents over-exposure.");
+        EditText maxDaily = infoRow(scanCard, "Max trades per day",
+            String.valueOf(store.maxDailyTrades),
+            "Maximum number of trades the bot opens in one day. Resets at midnight. "
+            + "Set lower to limit exposure. 0 = unlimited.");
         scanCard.addView(gap(8));
         Button saveBtn = bigBtn("Save Scanner Settings", CYAN);
         saveBtn.setOnClickListener(v -> {
@@ -741,6 +813,8 @@ public class DexActivity extends Activity {
                 store.minPairAgeHours   = Integer.parseInt(minAge.getText().toString());
                 store.minMomentumPercent = Double.parseDouble(minMom.getText().toString());
                 store.maxPositions      = Integer.parseInt(maxPos.getText().toString());
+                int daily = Integer.parseInt(maxDaily.getText().toString());
+                store.maxDailyTrades    = daily <= 0 ? Integer.MAX_VALUE : daily;
                 store.save();
                 Toast.makeText(this, "Scanner settings saved", Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
@@ -751,32 +825,39 @@ public class DexActivity extends Activity {
 
         // Strategy / Scalping settings
         LinearLayout stratCard = card(p);
-        tv2(stratCard, "SCALPING SETTINGS", 14, CYAN, Typeface.BOLD);
-        tv2(stratCard, "ML evolves these automatically. Manual override here.", 11, GREY, Typeface.NORMAL);
-        stratCard.addView(gap(8));
-        EditText sl   = infoRow(stratCard, "Stop loss (%)",
-            String.valueOf(store.stopLossPercent),
-            "Exit position when price drops this % below entry. Protects against large losses.");
-        EditText tp   = infoRow(stratCard, "Take profit (%)",
-            String.valueOf(store.takeProfitPercent),
-            "Exit position when price rises this % above entry. Locks in profit.");
-        EditText maxH = infoRow(stratCard, "Max hold (minutes)",
-            String.valueOf(store.maxHoldMinutes),
-            "Close position after this many minutes even if TP/SL not hit. Prevents dead positions.");
-        stratCard.addView(gap(8));
-        Button stratSave = bigBtn("Save Strategy Settings", CYAN);
-        stratSave.setOnClickListener(v -> {
-            try {
-                store.stopLossPercent   = Double.parseDouble(sl.getText().toString());
-                store.takeProfitPercent = Double.parseDouble(tp.getText().toString());
-                store.maxHoldMinutes    = Integer.parseInt(maxH.getText().toString());
-                store.save();
-                Toast.makeText(this, "Strategy settings saved", Toast.LENGTH_SHORT).show();
-            } catch (Exception e) {
-                Toast.makeText(this, "Invalid input", Toast.LENGTH_SHORT).show();
-            }
-        });
-        stratCard.addView(stratSave);
+        tv2(stratCard, "SCALPING SETTINGS", 14, store.autoMode ? GREY : CYAN, Typeface.BOLD);
+        if (store.autoMode) {
+            tv2(stratCard, "Locked in Auto Mode — ML manages these automatically.", 11, PURPLE, Typeface.NORMAL);
+            stratCard.addView(gap(4));
+            tv2(stratCard, "SL: " + store.stopLossPercent + "%  |  TP: " + store.takeProfitPercent
+                + "%  |  Hold: " + store.maxHoldMinutes + "min", 13, WHITE, Typeface.BOLD);
+        } else {
+            tv2(stratCard, "ML evolves these automatically. Manual override here.", 11, GREY, Typeface.NORMAL);
+            stratCard.addView(gap(8));
+            EditText sl   = infoRow(stratCard, "Stop loss (%)",
+                String.valueOf(store.stopLossPercent),
+                "Exit position when price drops this % below entry. Protects against large losses.");
+            EditText tp   = infoRow(stratCard, "Take profit (%)",
+                String.valueOf(store.takeProfitPercent),
+                "Exit position when price rises this % above entry. Locks in profit.");
+            EditText maxH = infoRow(stratCard, "Max hold (minutes)",
+                String.valueOf(store.maxHoldMinutes),
+                "Close position after this many minutes even if TP/SL not hit. Prevents dead positions.");
+            stratCard.addView(gap(8));
+            Button stratSave = bigBtn("Save Strategy Settings", CYAN);
+            stratSave.setOnClickListener(v -> {
+                try {
+                    store.stopLossPercent   = Double.parseDouble(sl.getText().toString());
+                    store.takeProfitPercent = Double.parseDouble(tp.getText().toString());
+                    store.maxHoldMinutes    = Integer.parseInt(maxH.getText().toString());
+                    store.save();
+                    Toast.makeText(this, "Strategy settings saved", Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {
+                    Toast.makeText(this, "Invalid input", Toast.LENGTH_SHORT).show();
+                }
+            });
+            stratCard.addView(stratSave);
+        }
 
         // TP Targets
         LinearLayout tpCard = card(p);
@@ -806,40 +887,49 @@ public class DexActivity extends Activity {
 
         // Algo Trading Settings
         LinearLayout algoCard = card(p);
-        tv2(algoCard, "ALGO TRADING", 14, CYAN, Typeface.BOLD);
+        tv2(algoCard, "ALGO TRADING", 14, store.autoMode ? GREY : CYAN, Typeface.BOLD);
         tv2(algoCard, "RSI, MACD-like signals and volume confirmation filter entries.", 11, GREY, Typeface.NORMAL);
         algoCard.addView(gap(8));
-        EditText minAlgo  = infoRow(algoCard, "Min algo score to enter (0–100)",
-            String.valueOf(store.minAlgoScore),
-            "Minimum AlgoEngine score (0-100) required to open a position. Higher = more selective, fewer trades.");
-        EditText trailPct = infoRow(algoCard, "Trailing stop distance (%)",
-            String.valueOf(store.trailingStopPct),
-            "Once price rises, stop loss trails this % below the peak price. Locks in unrealised profit.");
-        algoCard.addView(gap(4));
-        LinearLayout trailRow = row(0, 0);
-        TextView trailLabel = tv2(trailRow, "Trailing stop loss", 13, WHITE, Typeface.NORMAL);
-        trailLabel.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        android.widget.Switch trailSwitch = new android.widget.Switch(this);
-        trailSwitch.setChecked(store.useTrailingStop);
-        trailSwitch.setOnCheckedChangeListener((b, checked) -> { store.useTrailingStop = checked; store.save(); });
-        trailRow.addView(trailSwitch);
-        algoCard.addView(trailRow);
-        algoCard.addView(gap(8));
-        double rsiEx = AlgoEngine.approximateRsi(2.5, 5.0);
-        tv2(algoCard, "Example: RSI≈" + (int)rsiEx + " at +2.5% 1h / +5% 24h", 10, GREY, Typeface.NORMAL);
-        algoCard.addView(gap(4));
-        Button algoSave = bigBtn("Save Algo Settings", CYAN);
-        algoSave.setOnClickListener(v -> {
-            try {
-                store.minAlgoScore    = Integer.parseInt(minAlgo.getText().toString());
-                store.trailingStopPct = Double.parseDouble(trailPct.getText().toString());
-                store.save();
-                Toast.makeText(this, "Algo settings saved", Toast.LENGTH_SHORT).show();
-            } catch (Exception e) {
-                Toast.makeText(this, "Invalid input", Toast.LENGTH_SHORT).show();
-            }
-        });
-        algoCard.addView(algoSave);
+        if (store.autoMode) {
+            tv2(algoCard, "Locked in Auto Mode — ML manages algo score and trailing stop.",
+                11, PURPLE, Typeface.NORMAL);
+            tv2(algoCard, "AlgoMin: " + store.minAlgoScore
+                + "  |  Trail: " + store.trailingStopPct + "%"
+                + "  |  Trailing stop: " + (store.useTrailingStop ? "ON" : "OFF"),
+                13, WHITE, Typeface.BOLD);
+        } else {
+            EditText minAlgo  = infoRow(algoCard, "Min algo score to enter (0–100)",
+                String.valueOf(store.minAlgoScore),
+                "Minimum AlgoEngine score (0-100) required to open a position. Higher = more selective, fewer trades.");
+            EditText trailPct = infoRow(algoCard, "Trailing stop distance (%)",
+                String.valueOf(store.trailingStopPct),
+                "Once price rises, stop loss trails this % below the peak price. Locks in unrealised profit.");
+            algoCard.addView(gap(4));
+            LinearLayout trailRow = row(0, 0);
+            TextView trailLabel = tv2(trailRow, "Trailing stop loss", 13, WHITE, Typeface.NORMAL);
+            trailLabel.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            android.widget.Switch trailSwitch = new android.widget.Switch(this);
+            trailSwitch.setChecked(store.useTrailingStop);
+            trailSwitch.setOnCheckedChangeListener((b, checked) -> { store.useTrailingStop = checked; store.save(); });
+            trailRow.addView(trailSwitch);
+            algoCard.addView(trailRow);
+            algoCard.addView(gap(8));
+            double rsiEx = AlgoEngine.approximateRsi(2.5, 5.0);
+            tv2(algoCard, "Example: RSI≈" + (int)rsiEx + " at +2.5% 1h / +5% 24h", 10, GREY, Typeface.NORMAL);
+            algoCard.addView(gap(4));
+            Button algoSave = bigBtn("Save Algo Settings", CYAN);
+            algoSave.setOnClickListener(v -> {
+                try {
+                    store.minAlgoScore    = Integer.parseInt(minAlgo.getText().toString());
+                    store.trailingStopPct = Double.parseDouble(trailPct.getText().toString());
+                    store.save();
+                    Toast.makeText(this, "Algo settings saved", Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {
+                    Toast.makeText(this, "Invalid input", Toast.LENGTH_SHORT).show();
+                }
+            });
+            algoCard.addView(algoSave);
+        }
 
         // Telegram
         LinearLayout tgCard = card(p);

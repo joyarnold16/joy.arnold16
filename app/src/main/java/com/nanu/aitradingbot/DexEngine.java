@@ -117,8 +117,13 @@ public class DexEngine {
     // ─ QUEUE DRAIN (auto-retry next if blocked) ─────────────────────
 
     private void drainQueue() {
+        // Auto mode: re-evolve ML params before each drain cycle
+        if (store.autoMode) BotEvolution.evolve(store);
+
         Iterator<DexCandidate> it = queue.iterator();
-        while (it.hasNext() && store.openPositionCount() < store.maxPositions) {
+        while (it.hasNext()
+                && store.openPositionCount() < store.maxPositions
+                && store.tradesToday < store.maxDailyTrades) {
             DexCandidate c = it.next();
             queue.remove(c);
 

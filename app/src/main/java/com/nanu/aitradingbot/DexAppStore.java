@@ -22,6 +22,7 @@ public class DexAppStore {
     public double minLiquidityUsd     = 25_000;
     public int    minPairAgeHours     = 0;
     public int    maxPositions        = 3;
+    public int    maxDailyTrades      = 10;
     public int    scanIntervalMin     = 5;
     public int    maxHoldMinutes      = 15;
 
@@ -34,6 +35,9 @@ public class DexAppStore {
     public double tp1Percent = 2.0;
     public double tp2Percent = 4.0;
     public double tp3Percent = 8.0;
+
+    // Auto Mode: ML controls all params; manual overrides locked
+    public boolean autoMode     = false;
 
     // Live mode (off by default — paper first)
     public boolean liveMode     = false;
@@ -76,6 +80,8 @@ public class DexAppStore {
             .putFloat("minLiq",     (float) minLiquidityUsd)
             .putInt("minAge",       minPairAgeHours)
             .putInt("maxPos",       maxPositions)
+            .putInt("maxDaily",     maxDailyTrades)
+            .putBoolean("autoMode", autoMode)
             .putInt("scanMin",      scanIntervalMin)
             .putInt("maxHold",      maxHoldMinutes)
             .putInt("minAlgoScore",    minAlgoScore)
@@ -110,6 +116,8 @@ public class DexAppStore {
         minLiquidityUsd    = prefs.getFloat("minLiq",   25000f);
         minPairAgeHours    = prefs.getInt("minAge",     0);
         maxPositions       = prefs.getInt("maxPos",     3);
+        maxDailyTrades     = prefs.getInt("maxDaily",   10);
+        autoMode           = prefs.getBoolean("autoMode", false);
         scanIntervalMin    = prefs.getInt("scanMin",    5);
         maxHoldMinutes     = prefs.getInt("maxHold",    15);
         minAlgoScore       = prefs.getInt("minAlgoScore",   55);
