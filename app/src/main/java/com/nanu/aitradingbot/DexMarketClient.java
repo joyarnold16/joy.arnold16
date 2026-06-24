@@ -22,6 +22,89 @@ public class DexMarketClient {
         void onError(String msg);
     }
 
+    public static void discoverBnb(DexAppStore store, Callback callback) {
+        discoverChain("bsc", store, callback);
+    }
+
+    public static void discoverSol(DexAppStore store, Callback callback) {
+        discoverChain("solana", store, callback);
+    }
+
+    private static void discoverChain(String chain, DexAppStore store, Callback callback) {
+        new Thread(() -> {
+            try {
+                Set<String> addresses = new LinkedHashSet<>();
+                collectChainAddresses(API + "/token-profiles/latest/v1", chain, addresses, MAX_ADDR);
+                if (addresses.size() < 5)
+                    collectChainAddresses(API + "/token-boosts/top/v1", chain, addresses, MAX_ADDR);
+                if (addresses.size() < 5)
+                    collectChainAddresses(API + "/token-boosts/active/v1", chain, addresses, MAX_ADDR);
+
+                if (addresses.isEmpty()) {
+                    callback.onError("No " + chain + " tokens found");
+                    return;
+                }
+
+                List<DexCandidate> all = new ArrayList<>();
+                List<String> addrList = new ArrayList<>(addresses);
+                for (int i = 0; i < addrList.size(); i += 30) {
+                    List<String> batch = addrList.subList(i, Math.min(i + 30, addrList.size()));
+                    StringBuilder sb = new StringBuilder();
+                    for (String a : batch) { if (sb.length() > 0) sb.append(','); sb.append(a); }
+                    try {
+                        JSONObject resp = httpGet(API + "/tokens/" + sb);
+                        if (resp == null) continue;
+                        JSONArray pairs = resp.optJSONArray("pairs");
+                        if (pairs == null) continue;
+                        for (int j = 0; j < pairs.length(); j++) {
+                            DexCandidate c = parse(pairs.getJSONObject(j));
+                            if (c != null && chain.equals(c.chain)) all.add(c);
+                        }
+                    } catch (Exception e) { Log.w(TAG, "Batch error: " + e.getMessage()); }
+                    Thread.sleep(300);
+                }
+                scoreAndSort(all, store);
+                callback.onResult(all);
+            } catch (Exception e) {
+                Log.e(TAG, "Discovery error " + chain, e);
+                callback.onError(e.getMessage());
+            }
+        }, "nanu-dex-" + chain).start();
+    }
+
+    private static void collectChainAddresses(String url, String chain, Set<String> out, int max) {
+        try {
+            JSONArray arr = httpGetArray(url);
+            if (arr == null) return;
+            for (int i = 0; i < arr.length() && out.size() < max; i++) {
+                JSONObject item = arr.getJSONObject(i);
+                if (!chain.equals(item.optString("chainId", ""))) continue;
+                String addr = item.optString("tokenAddress", "");
+                if (!addr.isEmpty()) out.add(addr);
+            }
+        } catch (Exception e) { Log.w(TAG, "collectChainAddresses error: " + e.getMessage()); }
+    }
+
+    private static void scoreAndSort(List<DexCandidate> all, DexAppStore store) {
+        for (DexCandidate c : all) {
+            c.patterns = CandlePatterns.detect(c);
+            c.score = DexSafetyPolicy.score(c, store);
+            String block = DexSafetyPolicy.check(c, store);
+            String warn  = DexSafetyPolicy.softWarning(c);
+            if (block != null) {
+                c.status = "BLOCKED";
+                c.blockReason = block + (warn.isEmpty() ? "" : "; " + warn);
+            } else if (c.score >= 70) {
+                c.status = "QUALIFIED";
+                c.blockReason = warn.isEmpty() ? "Passed hard filters" : "Passed hard filters; caution: " + warn;
+            } else {
+                c.status = "WATCHING";
+                c.blockReason = warn.isEmpty() ? "Score below threshold" : warn;
+            }
+        }
+        all.sort((a, b) -> Integer.compare(b.score, a.score));
+    }
+
     public static void discover(DexAppStore store, Callback callback) {
         new Thread(() -> {
             try {
@@ -60,27 +143,7 @@ public class DexMarketClient {
                     Thread.sleep(300);
                 }
 
-                // Score and attach candle patterns
-                for (DexCandidate c : all) {
-                    c.patterns = CandlePatterns.detect(c);
-                    c.score = DexSafetyPolicy.score(c, store);
-                    String block = DexSafetyPolicy.check(c, store);
-                    String warn  = DexSafetyPolicy.softWarning(c);
-                    if (block != null) {
-                        c.status = "BLOCKED";
-                        c.blockReason = block;
-                        if (!warn.isEmpty()) c.blockReason += "; " + warn;
-                    } else if (c.score >= 70) {
-                        c.status = "QUALIFIED";
-                        c.blockReason = warn.isEmpty() ? "Passed hard filters" :
-                            "Passed hard filters; caution: " + warn;
-                    } else {
-                        c.status = "WATCHING";
-                        c.blockReason = warn.isEmpty() ? "Score below threshold" : warn;
-                    }
-                }
-
-                all.sort((a, b) -> Integer.compare(b.score, a.score));
+                scoreAndSort(all, store);
                 callback.onResult(all);
 
             } catch (Exception e) {

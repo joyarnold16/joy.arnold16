@@ -48,12 +48,20 @@ public class DexActivity extends Activity {
     private TextView[] tabBtns;
     private LinearLayout content;
     private List<DexCandidate> lastCandidates = new ArrayList<>();
+    private EditText withdrawAddressField;
 
     // —— Lifecycle ———————————————————————————————————————
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         try {
+            // Register full BouncyCastle so web3j secp256k1 works on Android
+            try {
+                java.security.Security.removeProvider("BC");
+                java.security.Security.addProvider(
+                    new org.bouncycastle.jce.provider.BouncyCastleProvider());
+            } catch (Throwable ignore) {}
+
             ui    = new Handler(Looper.getMainLooper());
             store = new DexAppStore(this);
 
@@ -82,7 +90,15 @@ public class DexActivity extends Activity {
 
     @Override protected void onDestroy() {
         super.onDestroy();
-        // Engine continues in TradeService
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        com.journeyapps.barcodescanner.IntentResult result =
+            com.journeyapps.barcodescanner.IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
+        if (result != null && result.getContents() != null && withdrawAddressField != null) {
+            withdrawAddressField.setText(result.getContents());
+        }
     }
 
     // —— Wallet ———————————————————————————————————————
@@ -304,21 +320,58 @@ public class DexActivity extends Activity {
     private void buildDiscover() {
         LinearLayout p = page();
         LinearLayout header = card(p);
-        tv2(header, "DEX DISCOVERY — BNB + SOL", 16, WHITE, Typeface.BOLD);
-        tv2(header, "Both chains scanned. Candlestick patterns applied. QUALIFIED label is not a scam guarantee.",
+        tv2(header, "DEX DISCOVERY", 16, WHITE, Typeface.BOLD);
+        tv2(header, "Scan BNB or SOL individually. Candlestick patterns applied. QUALIFIED is not a scam guarantee.",
             11, GREY, Typeface.NORMAL);
         header.addView(gap(8));
-        Button scanBtn = bigBtn("Scan Now (BNB + SOL)", CYAN);
-        scanBtn.setOnClickListener(v -> {
-            scanBtn.setText("Scanning…");
-            scanBtn.setEnabled(false);
-            engine.triggerScanNow();
-            ui.postDelayed(() -> {
-                scanBtn.setText("Scan Now (BNB + SOL)");
-                scanBtn.setEnabled(true);
-            }, 15_000);
+
+        LinearLayout scanBtns = row(0, 0);
+        Button bnbBtn = btn("Scan BNB", AMBER, null);
+        Button solBtn = btn("Scan SOL", PURPLE, null);
+        Button bothBtn = btn("Scan Both", CYAN, null);
+
+        bnbBtn.setOnClickListener(v -> {
+            bnbBtn.setText("Scanning…"); bnbBtn.setEnabled(false);
+            DexMarketClient.discoverBnb(store, new DexMarketClient.Callback() {
+                public void onResult(java.util.List<DexCandidate> c) {
+                    lastCandidates.removeIf(x -> "bsc".equals(x.chain));
+                    lastCandidates.addAll(0, c);
+                    ui.post(() -> { bnbBtn.setText("Scan BNB"); bnbBtn.setEnabled(true); buildDiscover(); });
+                }
+                public void onError(String msg) {
+                    ui.post(() -> { bnbBtn.setText("Scan BNB"); bnbBtn.setEnabled(true);
+                        Toast.makeText(DexActivity.this, "BNB scan: " + msg, Toast.LENGTH_SHORT).show(); });
+                }
+            });
         });
-        header.addView(scanBtn);
+
+        solBtn.setOnClickListener(v -> {
+            solBtn.setText("Scanning…"); solBtn.setEnabled(false);
+            DexMarketClient.discoverSol(store, new DexMarketClient.Callback() {
+                public void onResult(java.util.List<DexCandidate> c) {
+                    lastCandidates.removeIf(x -> "solana".equals(x.chain));
+                    lastCandidates.addAll(c);
+                    ui.post(() -> { solBtn.setText("Scan SOL"); solBtn.setEnabled(true); buildDiscover(); });
+                }
+                public void onError(String msg) {
+                    ui.post(() -> { solBtn.setText("Scan SOL"); solBtn.setEnabled(true);
+                        Toast.makeText(DexActivity.this, "SOL scan: " + msg, Toast.LENGTH_SHORT).show(); });
+                }
+            });
+        });
+
+        bothBtn.setOnClickListener(v -> {
+            bothBtn.setText("Scanning…"); bothBtn.setEnabled(false);
+            engine.triggerScanNow();
+            ui.postDelayed(() -> { bothBtn.setText("Scan Both"); bothBtn.setEnabled(true); }, 15_000);
+        });
+
+        scanBtns.addView(bnbBtn);
+        scanBtns.addView(gap(6));
+        scanBtns.addView(solBtn);
+        scanBtns.addView(gap(6));
+        scanBtns.addView(bothBtn);
+        header.addView(scanBtns);
 
         if (lastCandidates.isEmpty()) {
             LinearLayout empty = card(p);
@@ -400,9 +453,9 @@ public class DexActivity extends Activity {
         summary.addView(gap(8));
         tv2(summary, BotEvolution.summary(store), 12, PURPLE, Typeface.NORMAL);
         summary.addView(gap(8));
-        Button csv = bigBtn("Export CSV to Downloads", CARD);
-        csv.setOnClickListener(v -> exportCsv(closed));
-        summary.addView(csv);
+        Button pdfBtn = bigBtn("Export PDF to Downloads", CYAN);
+        pdfBtn.setOnClickListener(v -> exportPdf(closed));
+        summary.addView(pdfBtn);
 
         if (closed.isEmpty()) {
             LinearLayout empty = card(p);
@@ -545,9 +598,9 @@ public class DexActivity extends Activity {
         LinearLayout p = page();
 
         // BNB
-        walletSection(p, "BNB Chain Wallet", store.bnbAddress, AMBER);
+        walletSection(p, "BNB Chain Wallet", store.bnbAddress, AMBER, "bnb");
         // SOL
-        walletSection(p, "Solana Wallet", store.solAddress, PURPLE);
+        walletSection(p, "Solana Wallet", store.solAddress, PURPLE, "sol");
 
         // Withdraw
         LinearLayout wdCard = card(p);
@@ -555,9 +608,19 @@ public class DexActivity extends Activity {
         tv2(wdCard, "Requires live mode. Signing not yet active in paper mode.",
             11, GREY, Typeface.NORMAL);
         wdCard.addView(gap(8));
-        EditText toAddr = input(wdCard, "Destination address");
+        withdrawAddressField = input(wdCard, "Destination address");
         EditText amount = input(wdCard, "Amount");
         amount.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        wdCard.addView(gap(4));
+        Button qrScanBtn = bigBtn("Scan QR Address", CARD);
+        qrScanBtn.setOnClickListener(v -> {
+            new com.journeyapps.barcodescanner.IntentIntegrator(this)
+                .setDesiredBarcodeFormats(com.journeyapps.barcodescanner.IntentIntegrator.QR_CODE)
+                .setPrompt("Scan destination wallet QR code")
+                .setBeepEnabled(false)
+                .initiateScan();
+        });
+        wdCard.addView(qrScanBtn);
         wdCard.addView(gap(8));
         Button wdBtn = bigBtn(store.liveMode ? "Withdraw" : "Signing not yet active", GREY);
         wdBtn.setOnClickListener(v -> {
@@ -565,7 +628,7 @@ public class DexActivity extends Activity {
                 alert("Withdraw disabled", "Enable live mode in Control tab first. Paper mode cannot sign transactions.");
             } else {
                 alert("Confirm Withdraw",
-                    "Send " + amount.getText() + " to:\n" + toAddr.getText()
+                    "Send " + amount.getText() + " to:\n" + withdrawAddressField.getText()
                     + "\n\nThis is a real transaction.");
             }
         });
@@ -591,13 +654,21 @@ public class DexActivity extends Activity {
         set(p);
     }
 
-    private void walletSection(LinearLayout parent, String title, String address, int color) {
+    private void walletSection(LinearLayout parent, String title, String address, int color, String chain) {
         LinearLayout card = card(parent);
         tv2(card, title, 14, color, Typeface.BOLD);
         card.addView(gap(4));
+        if (address == null || address.isEmpty()) {
+            tv2(card, "Address not derived yet. Restart app to retry wallet setup.", 12, AMBER, Typeface.NORMAL);
+            return;
+        }
         TextView addrTv = tv(address, 11, WHITE);
         addrTv.setOnClickListener(v -> copy(address));
         card.addView(addrTv);
+        card.addView(gap(4));
+        // Balance row
+        TextView balTv = tv2(card, "Balance: loading…", 13, GREY, Typeface.NORMAL);
+        fetchBalance(chain, address, bal -> ui.post(() -> balTv.setText("Balance: " + bal)));
         card.addView(gap(8));
         // QR code
         Bitmap qr = qrCode(address, dp(200));
@@ -625,29 +696,60 @@ public class DexActivity extends Activity {
     private void buildControl() {
         LinearLayout p = page();
 
+        // ML Evolution Status Card
+        LinearLayout mlCard = card(p);
+        tv2(mlCard, "ML EVOLUTION STATUS", 14, PURPLE, Typeface.BOLD);
+        mlCard.addView(gap(4));
+        tv2(mlCard, BotEvolution.summary(store), 12, WHITE, Typeface.NORMAL);
+        tv2(mlCard, "Last change: " + BotEvolution.lastChange(), 11, GREY, Typeface.NORMAL);
+        mlCard.addView(gap(8));
+        LinearLayout mlBtns = row(0, 0);
+        Button evolveNow = btn("Evolve Now", PURPLE, v -> {
+            BotEvolution.evolve(store);
+            Toast.makeText(this, "ML evolved! Gen " + store.mlGeneration, Toast.LENGTH_SHORT).show();
+            buildControl();
+        });
+        Button resetMl = btn("Reset ML", AMBER, v ->
+            new AlertDialog.Builder(this)
+                .setTitle("Reset ML?")
+                .setMessage("This resets all ML parameters back to defaults. Continue?")
+                .setPositiveButton("Reset", (d, w) -> {
+                    BotEvolution.reset(store);
+                    Toast.makeText(this, "ML reset to defaults", Toast.LENGTH_SHORT).show();
+                    buildControl();
+                })
+                .setNegativeButton("Cancel", null).show());
+        mlBtns.addView(evolveNow); mlBtns.addView(gap(8)); mlBtns.addView(resetMl);
+        mlCard.addView(mlBtns);
+
         // Scanner settings
         LinearLayout scanCard = card(p);
         tv2(scanCard, "SCANNER SETTINGS", 14, CYAN, Typeface.BOLD);
         scanCard.addView(gap(8));
-        EditText scanInt  = settingRow(scanCard, "Scan interval (min)",
-            String.valueOf(store.scanIntervalMin));
-        EditText minLiq   = settingRow(scanCard, "Min liquidity (USD)",
-            String.valueOf((int)store.minLiquidityUsd));
-        EditText minAge   = settingRow(scanCard, "Min pair age (hours)",
-            String.valueOf(store.minPairAgeHours));
-        EditText minMom   = settingRow(scanCard, "Min momentum (% 1h)",
-            String.valueOf(store.minMomentumPercent));
-        EditText maxPos   = settingRow(scanCard, "Max simultaneous positions",
-            String.valueOf(store.maxPositions));
+        EditText scanInt = infoRow(scanCard, "Scan interval (min)",
+            String.valueOf(store.scanIntervalMin),
+            "How often the bot checks DEX Screener for new tokens (minutes). Lower = more frequent but more API calls.");
+        EditText minLiq  = infoRow(scanCard, "Min liquidity (USD)",
+            String.valueOf((int)store.minLiquidityUsd),
+            "Minimum pool liquidity in USD. Tokens below this are too illiquid to trade safely.");
+        EditText minAge  = infoRow(scanCard, "Min pair age (hours)",
+            String.valueOf(store.minPairAgeHours),
+            "Minimum age of the trading pair in hours. Newer pairs = higher rug risk.");
+        EditText minMom  = infoRow(scanCard, "Min momentum (% 1h)",
+            String.valueOf(store.minMomentumPercent),
+            "Minimum 1-hour price movement % to consider a token. Filters out stagnant tokens.");
+        EditText maxPos  = infoRow(scanCard, "Max simultaneous positions",
+            String.valueOf(store.maxPositions),
+            "Maximum number of open paper positions at once. Prevents over-exposure.");
         scanCard.addView(gap(8));
         Button saveBtn = bigBtn("Save Scanner Settings", CYAN);
         saveBtn.setOnClickListener(v -> {
             try {
-                store.scanIntervalMin   = Integer.parseInt(scanInt.getText().toString());
-                store.minLiquidityUsd  = Double.parseDouble(minLiq.getText().toString());
-                store.minPairAgeHours  = Integer.parseInt(minAge.getText().toString());
+                store.scanIntervalMin    = Integer.parseInt(scanInt.getText().toString());
+                store.minLiquidityUsd   = Double.parseDouble(minLiq.getText().toString());
+                store.minPairAgeHours   = Integer.parseInt(minAge.getText().toString());
                 store.minMomentumPercent = Double.parseDouble(minMom.getText().toString());
-                store.maxPositions     = Integer.parseInt(maxPos.getText().toString());
+                store.maxPositions      = Integer.parseInt(maxPos.getText().toString());
                 store.save();
                 Toast.makeText(this, "Scanner settings saved", Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
@@ -656,18 +758,20 @@ public class DexActivity extends Activity {
         });
         scanCard.addView(saveBtn);
 
-        // Strategy settings
+        // Strategy / Scalping settings
         LinearLayout stratCard = card(p);
         tv2(stratCard, "SCALPING SETTINGS", 14, CYAN, Typeface.BOLD);
-        tv2(stratCard, "ML overrides these after each trade. You can reset here.",
-            11, GREY, Typeface.NORMAL);
+        tv2(stratCard, "ML evolves these automatically. Manual override here.", 11, GREY, Typeface.NORMAL);
         stratCard.addView(gap(8));
-        EditText sl     = settingRow(stratCard, "Stop loss (%)",
-            String.valueOf(store.stopLossPercent));
-        EditText tp     = settingRow(stratCard, "Take profit (%)",
-            String.valueOf(store.takeProfitPercent));
-        EditText maxH   = settingRow(stratCard, "Max hold (minutes)",
-            String.valueOf(store.maxHoldMinutes));
+        EditText sl   = infoRow(stratCard, "Stop loss (%)",
+            String.valueOf(store.stopLossPercent),
+            "Exit position when price drops this % below entry. Protects against large losses.");
+        EditText tp   = infoRow(stratCard, "Take profit (%)",
+            String.valueOf(store.takeProfitPercent),
+            "Exit position when price rises this % above entry. Locks in profit.");
+        EditText maxH = infoRow(stratCard, "Max hold (minutes)",
+            String.valueOf(store.maxHoldMinutes),
+            "Close position after this many minutes even if TP/SL not hit. Prevents dead positions.");
         stratCard.addView(gap(8));
         Button stratSave = bigBtn("Save Strategy Settings", CYAN);
         stratSave.setOnClickListener(v -> {
@@ -683,31 +787,53 @@ public class DexActivity extends Activity {
         });
         stratCard.addView(stratSave);
 
+        // TP Targets
+        LinearLayout tpCard = card(p);
+        tv2(tpCard, "TAKE-PROFIT TARGETS", 14, CYAN, Typeface.BOLD);
+        tv2(tpCard, "Set 3 profit targets manually. Bot shows these on position cards for reference.", 11, GREY, Typeface.NORMAL);
+        tpCard.addView(gap(8));
+        EditText tp1 = infoRow(tpCard, "Target 1 (%)", String.valueOf(store.tp1Percent),
+            "First take-profit target. Consider closing 1/3 of position here.");
+        EditText tp2 = infoRow(tpCard, "Target 2 (%)", String.valueOf(store.tp2Percent),
+            "Second take-profit target. Consider closing another 1/3 here.");
+        EditText tp3 = infoRow(tpCard, "Target 3 (%)", String.valueOf(store.tp3Percent),
+            "Third take-profit target (moon target). Let the last 1/3 ride.");
+        tpCard.addView(gap(8));
+        Button tpSave = bigBtn("Save TP Targets", CYAN);
+        tpSave.setOnClickListener(v -> {
+            try {
+                store.tp1Percent = Double.parseDouble(tp1.getText().toString());
+                store.tp2Percent = Double.parseDouble(tp2.getText().toString());
+                store.tp3Percent = Double.parseDouble(tp3.getText().toString());
+                store.save();
+                Toast.makeText(this, "TP targets saved", Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                Toast.makeText(this, "Invalid input", Toast.LENGTH_SHORT).show();
+            }
+        });
+        tpCard.addView(tpSave);
+
         // Algo Trading Settings
         LinearLayout algoCard = card(p);
         tv2(algoCard, "ALGO TRADING", 14, CYAN, Typeface.BOLD);
-        tv2(algoCard, "RSI, MACD-like signals and volume confirmation filter entries.\nTrailing stop locks in profit as price rises.",
-            11, GREY, Typeface.NORMAL);
+        tv2(algoCard, "RSI, MACD-like signals and volume confirmation filter entries.", 11, GREY, Typeface.NORMAL);
         algoCard.addView(gap(8));
-        EditText minAlgo = settingRow(algoCard, "Min algo score to enter (0–100)",
-            String.valueOf(store.minAlgoScore));
-        EditText trailPct = settingRow(algoCard, "Trailing stop distance (%)",
-            String.valueOf(store.trailingStopPct));
+        EditText minAlgo  = infoRow(algoCard, "Min algo score to enter (0–100)",
+            String.valueOf(store.minAlgoScore),
+            "Minimum AlgoEngine score (0-100) required to open a position. Higher = more selective, fewer trades.");
+        EditText trailPct = infoRow(algoCard, "Trailing stop distance (%)",
+            String.valueOf(store.trailingStopPct),
+            "Once price rises, stop loss trails this % below the peak price. Locks in unrealised profit.");
         algoCard.addView(gap(4));
-        // Trailing stop toggle
         LinearLayout trailRow = row(0, 0);
-        tv2(trailRow, "Trailing stop loss", 13, WHITE, Typeface.NORMAL).setLayoutParams(
-            new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        TextView trailLabel = tv2(trailRow, "Trailing stop loss", 13, WHITE, Typeface.NORMAL);
+        trailLabel.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         android.widget.Switch trailSwitch = new android.widget.Switch(this);
         trailSwitch.setChecked(store.useTrailingStop);
-        trailSwitch.setOnCheckedChangeListener((b, checked) -> {
-            store.useTrailingStop = checked;
-            store.save();
-        });
+        trailSwitch.setOnCheckedChangeListener((b, checked) -> { store.useTrailingStop = checked; store.save(); });
         trailRow.addView(trailSwitch);
         algoCard.addView(trailRow);
         algoCard.addView(gap(8));
-        // Algo signal info
         double rsiEx = AlgoEngine.approximateRsi(2.5, 5.0);
         tv2(algoCard, "Example: RSI≈" + (int)rsiEx + " at +2.5% 1h / +5% 24h", 10, GREY, Typeface.NORMAL);
         algoCard.addView(gap(4));
@@ -729,8 +855,10 @@ public class DexActivity extends Activity {
         tv2(tgCard, "TELEGRAM ALERTS", 14, CYAN, Typeface.BOLD);
         tv2(tgCard, "Get notified on every trade open/close.", 11, GREY, Typeface.NORMAL);
         tgCard.addView(gap(8));
-        EditText tgToken  = settingRow(tgCard, "Bot Token (from @BotFather)", store.telegramToken);
-        EditText tgChat   = settingRow(tgCard, "Chat ID (from @userinfobot)", store.telegramChatId);
+        EditText tgToken = infoRow(tgCard, "Bot Token (from @BotFather)", store.telegramToken,
+            "Create a Telegram bot via @BotFather. It gives you a token like 123456:ABC-xyz. Paste it here.");
+        EditText tgChat  = infoRow(tgCard, "Chat ID (from @userinfobot)", store.telegramChatId,
+            "Message @userinfobot on Telegram to get your chat ID. It's a number like 987654321.");
         tgCard.addView(gap(8));
         LinearLayout tgBtns = row(0, 0);
         Button tgSave = btn("Save", CYAN, v -> {
@@ -852,31 +980,81 @@ public class DexActivity extends Activity {
             .show();
     }
 
-    private void exportCsv(List<TradeRecord> trades) {
+    private void exportPdf(List<TradeRecord> trades) {
         try {
+            android.graphics.pdf.PdfDocument doc = new android.graphics.pdf.PdfDocument();
+            android.graphics.Paint paint = new android.graphics.Paint();
+            android.graphics.Paint headPaint = new android.graphics.Paint();
+            headPaint.setTypeface(Typeface.DEFAULT_BOLD);
+            headPaint.setTextSize(13);
+            paint.setTextSize(10);
+
+            int pageW = 595, pageH = 842, margin = 36, lineH = 16;
+            int pageNum = 1;
+            android.graphics.pdf.PdfDocument.PageInfo pageInfo =
+                new android.graphics.pdf.PdfDocument.PageInfo.Builder(pageW, pageH, pageNum).create();
+            android.graphics.pdf.PdfDocument.Page page = doc.startPage(pageInfo);
+            android.graphics.Canvas canvas = page.getCanvas();
+
+            headPaint.setColor(android.graphics.Color.BLACK);
+            canvas.drawText("NANU AI Trading Bot — Trade History", margin, margin + 20, headPaint);
+            paint.setColor(android.graphics.Color.DKGRAY);
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US);
+            canvas.drawText("Generated: " + sdf.format(new Date()) + "  |  Total trades: " + trades.size(),
+                margin, margin + 36, paint);
+
+            int y = margin + 56;
+            paint.setColor(android.graphics.Color.BLACK);
+
+            String[] headers = {"Date", "Token", "Chain", "Entry", "Exit", "P/L USD", "P/L%", "Result", "Strategy"};
+            int[] cols = {margin, 110, 195, 235, 295, 355, 415, 460, 510};
+
+            headPaint.setTextSize(9);
+            for (int i = 0; i < headers.length; i++)
+                canvas.drawText(headers[i], cols[i], y, headPaint);
+            y += lineH;
+            paint.setColor(android.graphics.Color.LTGRAY);
+            canvas.drawLine(margin, y, pageW - margin, y, paint);
+            y += 4;
+            paint.setColor(android.graphics.Color.BLACK);
+            paint.setTextSize(8);
+
+            for (TradeRecord r : trades) {
+                if (y > pageH - margin - lineH) {
+                    doc.finishPage(page);
+                    pageNum++;
+                    pageInfo = new android.graphics.pdf.PdfDocument.PageInfo.Builder(pageW, pageH, pageNum).create();
+                    page = doc.startPage(pageInfo);
+                    canvas = page.getCanvas();
+                    y = margin + 20;
+                }
+                String[] row = {
+                    sdf.format(new Date(r.openTimeMs)),
+                    (r.tokenSymbol != null ? r.tokenSymbol : "?"),
+                    "bsc".equals(r.chain) ? "BNB" : "SOL",
+                    fmt8(r.entryPrice), fmt8(r.exitPrice),
+                    String.format("%+.4f", r.pnlUsd),
+                    String.format("%+.2f%%", r.pnlPercent),
+                    r.isWin ? "WIN" : "LOSS",
+                    r.strategyName != null ? r.strategyName : ""
+                };
+                paint.setColor(r.isWin ? android.graphics.Color.rgb(0, 120, 60)
+                    : android.graphics.Color.rgb(160, 0, 0));
+                for (int i = 0; i < row.length && i < cols.length; i++)
+                    canvas.drawText(row[i], cols[i], y, paint);
+                y += lineH;
+            }
+            doc.finishPage(page);
+
             File dir = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
             if (dir == null) dir = getFilesDir();
             File f = new File(dir, "nanu_trades_" +
-                new SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(new Date()) + ".csv");
-            PrintWriter pw = new PrintWriter(new FileWriter(f));
-            pw.println("Date,Token,Chain,Entry,Exit,PnlUsd,PnlPct,Result,Reason,Strategy,Conf,Mode,BuyTx");
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US);
-            for (TradeRecord r : trades) {
-                pw.printf("\"%s\",\"%s\",\"%s\",%.10f,%.10f,%.4f,%.2f,\"%s\",\"%s\",\"%s\",%d,\"%s\",\"%s\"%n",
-                    sdf.format(new Date(r.openTimeMs)),
-                    r.tokenSymbol, r.chain,
-                    r.entryPrice, r.exitPrice,
-                    r.pnlUsd, r.pnlPercent,
-                    r.isWin ? "WIN" : "LOSS",
-                    r.exitReason, r.strategyName,
-                    r.confidenceScore,
-                    r.isLive ? "LIVE" : "PAPER",
-                    r.buyTxHash);
-            }
-            pw.close();
-            Toast.makeText(this, "CSV saved: " + f.getName(), Toast.LENGTH_LONG).show();
+                new SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(new Date()) + ".pdf");
+            doc.writeTo(new FileOutputStream(f));
+            doc.close();
+            Toast.makeText(this, "PDF saved: " + f.getName(), Toast.LENGTH_LONG).show();
         } catch (Exception e) {
-            Toast.makeText(this, "CSV export failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "PDF export failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -1100,5 +1278,83 @@ public class DexActivity extends Activity {
         if (v >= 1_000_000) return String.format("%.1fM", v / 1_000_000);
         if (v >= 1_000) return String.format("%.1fK", v / 1_000);
         return String.format("%.0f", v);
+    }
+
+    // Setting row with ⓘ info icon
+    private EditText infoRow(LinearLayout parent, String label, String value, String info) {
+        LinearLayout labelRow = row(0, 0);
+        TextView lbl = tv(label, 11, GREY);
+        lbl.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        labelRow.addView(lbl);
+        TextView infoBtn = tv("  ⓘ", 14, CYAN);
+        infoBtn.setOnClickListener(v -> alert(label, info));
+        labelRow.addView(infoBtn);
+        parent.addView(labelRow);
+        EditText et = new EditText(this);
+        et.setText(value); et.setTextColor(WHITE);
+        et.setInputType(InputType.TYPE_CLASS_TEXT);
+        et.setBackgroundColor(0xFF0D1117);
+        et.setPadding(dp(10), dp(8), dp(10), dp(8));
+        et.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
+        parent.addView(et);
+        parent.addView(gap(6));
+        return et;
+    }
+
+    interface BalanceCallback { void onBalance(String text); }
+
+    private void fetchBalance(String chain, String address, BalanceCallback cb) {
+        if (address == null || address.isEmpty()) { cb.onBalance("N/A"); return; }
+        new Thread(() -> {
+            try {
+                String result;
+                if ("bnb".equals(chain)) {
+                    String url = "https://api.bscscan.com/api?module=account&action=balance&address="
+                        + address + "&tag=latest";
+                    java.net.HttpURLConnection conn =
+                        (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                    conn.setConnectTimeout(8000); conn.setReadTimeout(8000);
+                    conn.setRequestProperty("User-Agent", "NanuBot/11.1");
+                    if (conn.getResponseCode() == 200) {
+                        java.io.BufferedReader br = new java.io.BufferedReader(
+                            new java.io.InputStreamReader(conn.getInputStream()));
+                        StringBuilder sb = new StringBuilder(); String line;
+                        while ((line = br.readLine()) != null) sb.append(line);
+                        br.close();
+                        org.json.JSONObject j = new org.json.JSONObject(sb.toString());
+                        if ("1".equals(j.optString("status"))) {
+                            double wei = Double.parseDouble(j.getString("result"));
+                            result = String.format("%.6f BNB", wei / 1e18);
+                        } else result = "N/A";
+                    } else result = "N/A";
+                } else {
+                    // SOL RPC
+                    String body = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getBalance\","
+                        + "\"params\":[\"" + address + "\"]}";
+                    java.net.HttpURLConnection conn =
+                        (java.net.HttpURLConnection) new java.net.URL(
+                            "https://api.mainnet-beta.solana.com").openConnection();
+                    conn.setConnectTimeout(8000); conn.setReadTimeout(8000);
+                    conn.setRequestMethod("POST");
+                    conn.setRequestProperty("Content-Type", "application/json");
+                    conn.setRequestProperty("User-Agent", "NanuBot/11.1");
+                    conn.setDoOutput(true);
+                    conn.getOutputStream().write(body.getBytes("UTF-8"));
+                    if (conn.getResponseCode() == 200) {
+                        java.io.BufferedReader br = new java.io.BufferedReader(
+                            new java.io.InputStreamReader(conn.getInputStream()));
+                        StringBuilder sb = new StringBuilder(); String line;
+                        while ((line = br.readLine()) != null) sb.append(line);
+                        br.close();
+                        org.json.JSONObject j = new org.json.JSONObject(sb.toString());
+                        long lamports = j.optJSONObject("result") != null
+                            ? j.getJSONObject("result").optLong("value", -1) : -1;
+                        result = lamports >= 0 ? String.format("%.6f SOL", lamports / 1e9) : "N/A";
+                    } else result = "N/A";
+                }
+                final String r = result;
+                cb.onBalance(r);
+            } catch (Exception e) { cb.onBalance("N/A"); }
+        }, "nanu-balance").start();
     }
 }

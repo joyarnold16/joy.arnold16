@@ -10,8 +10,8 @@ android {
         applicationId "com.nanu.aitradingbot"
         minSdk 24
         targetSdk 35
-        versionCode 36
-        versionName "11.0-nanu"
+        versionCode 37
+        versionName "11.1-nanu"
         multiDexEnabled true
     }
 
@@ -39,6 +39,8 @@ android {
         exclude 'META-INF/LICENSE.md'
         exclude 'META-INF/NOTICE.md'
         pickFirst 'META-INF/*.kotlin_module'
+        pickFirst 'META-INF/BCKEY.DSA'
+        pickFirst 'META-INF/BCKEY.SF'
     }
 }
 
@@ -47,14 +49,18 @@ dependencies {
     implementation 'androidx.multidex:multidex:2.0.1'
     implementation 'com.google.android.material:material:1.12.0'
 
-    // Wallet: BIP39 + BIP32 + Ethereum signing (Maven Central)
+    // Wallet: BIP39 + BIP32 + Ethereum signing
     implementation('org.web3j:crypto:4.9.8') {
         exclude group: 'org.bouncycastle', module: 'bcprov-jdk15on'
     }
+    implementation 'org.bouncycastle:bcprov-jdk15on:1.70'
 
-    // Solana: ed25519 signing (Maven Central, pure Java)
+    // Solana: ed25519 signing
     implementation 'net.i2p.crypto:eddsa:0.3.0'
 
-    // QR codes
+    // QR code generate
     implementation 'com.google.zxing:core:3.5.3'
+
+    // QR code scanner
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
 }
