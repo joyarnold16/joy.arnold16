@@ -40,6 +40,7 @@ public class DexAppStore {
     public boolean liveChainBnb = false;
     public boolean liveChainSol = false;
     public double  tradeAmountUsd = 0;
+    public int     slippageBps    = 300; // 3.0% max slippage on live swaps
 
     // Telegram
     public String telegramToken  = "";
@@ -91,6 +92,7 @@ public class DexAppStore {
             .putBoolean("liveBnb",     liveChainBnb)
             .putBoolean("liveSol",     liveChainSol)
             .putFloat("tradeAmt",     (float) tradeAmountUsd)
+            .putInt("slippageBps",    slippageBps)
             .putString("tgToken",   telegramToken)
             .putString("tgChat",    telegramChatId)
             .putString("mlStrat",   mlStrategy)
@@ -126,6 +128,7 @@ public class DexAppStore {
         liveChainBnb       = prefs.getBoolean("liveBnb",    false);
         liveChainSol       = prefs.getBoolean("liveSol",    false);
         tradeAmountUsd     = prefs.getFloat("tradeAmt",     0f);
+        slippageBps        = prefs.getInt("slippageBps",    300);
         telegramToken      = prefs.getString("tgToken",  "");
         telegramChatId     = prefs.getString("tgChat",   "");
         mlStrategy         = prefs.getString("mlStrat",  "BALANCED");

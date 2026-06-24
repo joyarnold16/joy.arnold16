@@ -268,7 +268,7 @@ public class DexActivity extends Activity {
             : store.solAddress;
         tv2(wCard, bnbShort + "  (BNB)", 15, WHITE, Typeface.BOLD);
         tv2(wCard, solShort + "  (SOL)", 13, GREY, Typeface.NORMAL);
-        String modeStr = store.liveMode ? "🟢 LIVE MODE ACTIVE" : "Paper scanner active. Mainnet swaps are security-blocked.";
+        String modeStr = store.liveMode ? "🟢 LIVE MODE ACTIVE" : "Paper scanner active. Live swaps off — enable in Control.";
         tv2(wCard, modeStr, 12, store.liveMode ? GREEN : GREY, Typeface.NORMAL);
         wCard.addView(gap(8));
         // Stats row
@@ -989,6 +989,11 @@ public class DexActivity extends Activity {
         EditText tradeAmt = settingRow(liveCard, "Trade amount per position (USD)",
             store.tradeAmountUsd > 0 ? String.valueOf(store.tradeAmountUsd) : "");
         liveCard.addView(gap(6));
+        EditText slipPct = settingRow(liveCard, "Max slippage (%)",
+            String.valueOf(store.slippageBps / 100.0));
+        tv2(liveCard, "Rejects a swap if price moves more than this from the quote. Lower = safer, more failed swaps.",
+            11, GREY, Typeface.NORMAL);
+        liveCard.addView(gap(6));
         LinearLayout chainRow = row(0, 4);
         CheckBox bnbChk = new CheckBox(this); bnbChk.setText("BNB Chain");
         bnbChk.setTextColor(WHITE); bnbChk.setChecked(store.liveChainBnb);
@@ -1020,6 +1025,11 @@ public class DexActivity extends Activity {
                         store.tradeAmountUsd = finalAmt;
                         store.liveChainBnb = bnbChk.isChecked();
                         store.liveChainSol = solChk.isChecked();
+                        try {
+                            double sp = Double.parseDouble(slipPct.getText().toString());
+                            store.slippageBps = (int) Math.round(
+                                Math.max(0.1, Math.min(50.0, sp)) * 100);
+                        } catch (Exception ignored) {}
                         store.save();
                         refreshCurrentTab();
                         Toast.makeText(this, "🟢 LIVE MODE ENABLED", Toast.LENGTH_LONG).show();
