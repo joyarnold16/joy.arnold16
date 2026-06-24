@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: read
     steps:
       - uses: actions/checkout@v4
@@ -49,18 +49,16 @@ jobs:
         env:
           BUILD_TOOLS_VERSION: "34.0.0"
 
-      - name: Upload Signed APK
+      - name: Rename APK for release
         if: steps.sign_app.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: nanu-ai-v11-SIGNED
-          path: ${{ steps.sign_app.outputs.signedReleaseFile }}
-          retention-days: 30
+        run: cp "${{ steps.sign_app.outputs.signedReleaseFile }}" nanu-ai-trading-bot.apk
 
-      - name: Upload Unsigned APK (fallback - not installable)
-        if: steps.sign_app.outcome != 'success'
-        uses: actions/upload-artifact@v4
+      - name: Publish GitHub Release with direct APK
+        if: steps.sign_app.outcome == 'success'
+        uses: softprops/action-gh-release@v2
         with:
-          name: nanu-ai-v11-UNSIGNED-add-secrets-to-sign
-          path: app/build/outputs/apk/release/*.apk
-          retention-days: 30
+          tag_name: latest
+          name: Nanu AI Trading Bot
+          body: "Latest build — tap nanu-ai-trading-bot.apk to download directly"
+          files: nanu-ai-trading-bot.apk
+          prerelease: false
