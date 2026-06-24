@@ -128,9 +128,13 @@ public class DexAppStore {
     public boolean hasTelegram()            { return !telegramToken.isEmpty() && !telegramChatId.isEmpty(); }
 
     public void saveMnemonic(String m) {
-        secure.saveMnemonic(m);
-        bnbAddress = secure.deriveBnbAddress(m);
-        solAddress = secure.deriveSolAddress(m);
+        try {
+            secure.saveMnemonic(m);
+            bnbAddress = secure.deriveBnbAddress(m);
+            solAddress = secure.deriveSolAddress(m);
+        } catch (Throwable e) {
+            android.util.Log.e("DexAppStore", "saveMnemonic failed: " + e.getMessage());
+        }
         save();
     }
 

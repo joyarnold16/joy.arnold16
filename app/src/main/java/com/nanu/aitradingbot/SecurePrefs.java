@@ -94,7 +94,7 @@ public class SecurePrefs {
                 0, 0
             };
             return Credentials.create(Bip32ECKeyPair.deriveKeyPair(master, path)).getAddress();
-        } catch (Exception e) { return ""; }
+        } catch (Throwable e) { Log.e(TAG, "BNB derive failed: " + e.getMessage()); return ""; }
     }
 
     // SOL = SLIP-0010 ed25519 BIP44 path m/44'/501'/0'/0'
@@ -109,7 +109,7 @@ public class SecurePrefs {
             net.i2p.crypto.eddsa.EdDSAPrivateKey pk =
                 new net.i2p.crypto.eddsa.EdDSAPrivateKey(spec);
             return Base58.encode(pk.getAbyte());
-        } catch (Exception e) { return ""; }
+        } catch (Throwable e) { Log.e(TAG, "SOL derive failed: " + e.getMessage()); return ""; }
     }
 
     // SLIP-0010 hardened ed25519 derivation
@@ -140,6 +140,6 @@ public class SecurePrefs {
             byte[] entropy = new byte[16];
             new SecureRandom().nextBytes(entropy);
             return MnemonicUtils.generateMnemonic(entropy);
-        } catch (Exception e) { return ""; }
+        } catch (Throwable e) { Log.e(TAG, "generateMnemonic failed: " + e.getMessage()); return ""; }
     }
 }

@@ -64,7 +64,7 @@ public class DexActivity extends Activity {
 
             buildRoot();
             showTab(0);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             android.util.Log.e("DexActivity", "Startup crash", e);
             TextView errView = new TextView(this);
             errView.setText("Startup error: " + e.getClass().getSimpleName() + "\n" + e.getMessage());
@@ -100,7 +100,7 @@ public class DexActivity extends Activity {
                     .setCancelable(false)
                     .show();
             }
-        } catch (Exception e) {
+        } catch (Throwable e) {
             Toast.makeText(this, "Wallet init error: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
