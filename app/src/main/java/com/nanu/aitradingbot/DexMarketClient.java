@@ -93,12 +93,12 @@ public class DexMarketClient {
             if (block != null) {
                 c.status = "BLOCKED";
                 c.blockReason = block + (warn.isEmpty() ? "" : "; " + warn);
-            } else if (c.score >= 70) {
+            } else if (c.score >= 60) {
                 c.status = "QUALIFIED";
                 c.blockReason = warn.isEmpty() ? "Passed hard filters" : "Passed hard filters; caution: " + warn;
             } else {
                 c.status = "WATCHING";
-                c.blockReason = warn.isEmpty() ? "Score below threshold" : warn;
+                c.blockReason = warn.isEmpty() ? "Score below threshold (need 60+)" : warn;
             }
         }
         all.sort((a, b) -> Integer.compare(b.score, a.score));

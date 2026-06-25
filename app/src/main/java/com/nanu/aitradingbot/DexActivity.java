@@ -413,15 +413,26 @@ public class DexActivity extends Activity {
                 tv2(empty, "No results yet. Tap a Scan button above or Start the bot from Home.", 13, GREY, Typeface.NORMAL);
             }
         } else {
-            int bnbC = 0, solC = 0, qual = 0;
+            int bnbC = 0, solC = 0, qual = 0, watching = 0, blocked = 0;
             for (DexCandidate c : lastCandidates) {
                 if ("bsc".equals(c.chain)) bnbC++; else solC++;
                 if ("QUALIFIED".equals(c.status)) qual++;
+                else if ("WATCHING".equals(c.status)) watching++;
+                else blocked++;
             }
             LinearLayout summary = card(p);
             summary.setBackgroundResource(0);
-            tv2(summary, lastCandidates.size() + " tokens found  •  " + bnbC + " BNB  •  " + solC + " SOL  •  " + qual + " QUALIFIED",
+            tv2(summary, lastCandidates.size() + " scanned  •  " + bnbC + " BNB  •  " + solC + " SOL",
                 12, CYAN, Typeface.BOLD);
+            LinearLayout qRow = row(0, 6);
+            qRow.addView(tv2v(qual + " QUALIFIED", 12, GREEN, Typeface.BOLD));
+            qRow.addView(tv2v("  " + watching + " WATCHING", 12, AMBER, Typeface.NORMAL));
+            qRow.addView(tv2v("  " + blocked + " BLOCKED", 12, RED, Typeface.NORMAL));
+            summary.addView(qRow);
+            if (qual == 0 && !TradeService.active)
+                tv2(summary, "No entries taken — all tokens filtered out. Check reasons below.", 11, AMBER, Typeface.NORMAL);
+            else if (qual == 0)
+                tv2(summary, "Scanning… no QUALIFIED tokens yet.", 11, AMBER, Typeface.NORMAL);
             for (DexCandidate c : lastCandidates) {
                 candidateCard(p, c);
             }
@@ -1213,6 +1224,12 @@ public class DexActivity extends Activity {
         t.setTypeface(null, style);
         t.setPadding(0, dp(2), 0, dp(2));
         p.addView(t);
+        return t;
+    }
+
+    private TextView tv2v(String text, int sp, int color, int style) {
+        TextView t = tv(text, sp, color);
+        t.setTypeface(null, style);
         return t;
     }
 

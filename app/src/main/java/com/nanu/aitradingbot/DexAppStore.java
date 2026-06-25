@@ -18,8 +18,8 @@ public class DexAppStore {
     // ML strategy params (evolved by BotEvolution)
     public double stopLossPercent     = 1.5;
     public double takeProfitPercent   = 3.0;
-    public double minMomentumPercent  = 1.0;
-    public double minLiquidityUsd     = 25_000;
+    public double minMomentumPercent  = 0.3;   // require any positive 1h move; ML evolves this
+    public double minLiquidityUsd     = 15_000; // hard floor; ML raises this with experience
     public int    minPairAgeHours     = 0;
     public int    maxPositions        = 3;
     public int    maxDailyTrades      = 10;
@@ -28,7 +28,7 @@ public class DexAppStore {
     public int    maxHoldMinutes      = 15;
 
     // Algo trading settings
-    public int     minAlgoScore      = 55;
+    public int     minAlgoScore      = 45;  // permissive start; ML tightens once trades close
     public boolean useTrailingStop   = true;
     public double  trailingStopPct   = 1.0;
 

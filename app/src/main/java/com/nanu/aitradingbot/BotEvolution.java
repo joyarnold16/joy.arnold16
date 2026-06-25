@@ -20,15 +20,16 @@ public class BotEvolution {
     }
 
     private static final S[] POOL = {
-        new S("SCALPER",      2.0, 1.5,  3.0,  25_000, 0,  10, 50, 0.8),
-        new S("BALANCED",     1.0, 5.0, 10.0,  50_000, 2,  60, 55, 1.0),
-        new S("MOMENTUM",     3.5, 3.5,  7.0,  50_000, 1,  30, 60, 1.2),
-        new S("CONSERVATIVE", 0.5, 9.0, 20.0, 200_000, 8, 120, 45, 1.5),
-        new S("VOLUME_SPIKE", 2.0, 5.0, 12.0,  75_000, 1,  45, 65, 1.0),
-        new S("ACCUMULATION", 0.3, 7.0, 22.0, 100_000,12, 180, 40, 2.0),
-        new S("SNIPER",       5.0, 2.0,  4.0,  25_000, 0,   8, 75, 0.5),
-        new S("SAFE_LARGE",   0.5, 8.0, 15.0, 500_000, 8,  90, 50, 1.5),
-        new S("ANTI_DUMP",    1.5, 6.5, 11.0,  75_000, 4,  60, 60, 1.2),
+        //                    mom   sl    tp    liq      age hold algo trail
+        new S("SCALPER",      1.0, 1.5,  3.0,  15_000, 0,  10, 45, 0.8),
+        new S("BALANCED",     0.3, 5.0, 10.0,  25_000, 1,  60, 45, 1.0),
+        new S("MOMENTUM",     2.0, 3.5,  7.0,  30_000, 1,  30, 55, 1.2),
+        new S("CONSERVATIVE", 0.3, 9.0, 20.0, 100_000, 4, 120, 40, 1.5),
+        new S("VOLUME_SPIKE", 1.5, 5.0, 12.0,  40_000, 1,  45, 55, 1.0),
+        new S("ACCUMULATION", 0.1, 7.0, 22.0,  50_000, 6, 180, 35, 2.0),
+        new S("SNIPER",       3.0, 2.0,  4.0,  15_000, 0,   8, 65, 0.5),
+        new S("SAFE_LARGE",   0.3, 8.0, 15.0, 200_000, 4,  90, 45, 1.5),
+        new S("ANTI_DUMP",    0.5, 6.5, 11.0,  40_000, 2,  60, 50, 1.2),
     };
 
     private static String lastChangeSummary = "";
@@ -100,11 +101,11 @@ public class BotEvolution {
         store.mlStrategy         = "BALANCED";
         store.stopLossPercent    = 1.5;
         store.takeProfitPercent  = 3.0;
-        store.minMomentumPercent = 1.0;
-        store.minLiquidityUsd    = 25_000;
+        store.minMomentumPercent = 0.3;
+        store.minLiquidityUsd    = 15_000;
         store.minPairAgeHours    = 0;
         store.maxHoldMinutes     = 15;
-        store.minAlgoScore       = 55;
+        store.minAlgoScore       = 45;
         store.trailingStopPct    = 1.0;
         store.mlGeneration       = 0;
         lastChangeSummary        = "Reset to defaults";
