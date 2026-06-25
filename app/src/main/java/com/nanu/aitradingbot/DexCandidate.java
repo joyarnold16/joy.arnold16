@@ -57,11 +57,30 @@ public class DexCandidate {
     // Computed safety metrics
     public double fdvLiquidityRatio = 0;  // fdv / liquidityUsd; >100x = dangerous
 
+    // Computed ratios (derived in parsePair / scoreAndSort)
+    public double volLiqRatio  = 0;   // volumeUsd24h / liquidityUsd
+    public double buyPressure  = 0;   // buys24h / (buys24h + sells24h)
+
+    // Data freshness
+    public long dataFetchedAtMs = System.currentTimeMillis();
+
     // On-chain safety flags (populated by SolanaChecker / BscChecker before entry)
     public boolean mintAuthorityRevoked   = false;
     public boolean freezeAuthorityRevoked = false;
     public boolean lpBurned               = false;
+    public boolean lpLocked               = false;
     public boolean contractVerified       = false;
     public boolean ownerRenounced         = false;
     public String  onChainNote            = "";
+    public String  ownerPowerFlags        = "";  // dangerous owner capabilities (e.g. "BLACKLIST,MINT")
+    public int     chainSafetyScore       = 0;   // 0-20 from SolanaChecker / BscChecker
+
+    // Sell simulation result (pre-entry check)
+    public boolean sellSimOk     = true;   // default true; false = hard/soft block
+    public String  sellSimNote   = "";
+    public double  sellImpactPct = 0;      // expected price impact % for sell
+
+    // Stage band (set by DexSafetyPolicy after on-chain checks)
+    // REJECT / WATCH / PAPER / SMALL_LIVE / NORMAL_LIVE
+    public String stageBand = "REJECT";
 }

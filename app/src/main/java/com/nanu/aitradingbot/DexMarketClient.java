@@ -7,7 +7,9 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -15,6 +17,42 @@ import java.util.Set;
 public class DexMarketClient {
     private static final String TAG = "DexMarket";
     private static final String API = "https://api.dexscreener.com";
+
+    // ─ RATE LIMITER ──────────────────────────────────────────────────────────
+    // DEX Screener limits: 60/min for profile/boost, 300/min for pair/search
+    private static final Object PROFILE_LOCK = new Object();
+    private static final Object PAIR_LOCK    = new Object();
+    private static final Deque<Long> profileTimestamps = new ArrayDeque<>();
+    private static final Deque<Long> pairTimestamps    = new ArrayDeque<>();
+    private static final int PROFILE_LIMIT = 60;
+    private static final int PAIR_LIMIT    = 300;
+    private static final long WINDOW_MS    = 60_000L;
+
+    private static void acquireProfileSlot() throws InterruptedException {
+        acquireSlot(profileTimestamps, PROFILE_LOCK, PROFILE_LIMIT);
+    }
+
+    private static void acquirePairSlot() throws InterruptedException {
+        acquireSlot(pairTimestamps, PAIR_LOCK, PAIR_LIMIT);
+    }
+
+    private static void acquireSlot(Deque<Long> ts, Object lock, int limit)
+            throws InterruptedException {
+        synchronized (lock) {
+            long now = System.currentTimeMillis();
+            // Evict timestamps older than 1 minute
+            while (!ts.isEmpty() && now - ts.peekFirst() >= WINDOW_MS) ts.pollFirst();
+            if (ts.size() >= limit) {
+                // Sleep until oldest timestamp expires
+                long waitMs = WINDOW_MS - (now - ts.peekFirst()) + 10;
+                if (waitMs > 0) Thread.sleep(waitMs);
+                // Evict again after sleep
+                now = System.currentTimeMillis();
+                while (!ts.isEmpty() && now - ts.peekFirst() >= WINDOW_MS) ts.pollFirst();
+            }
+            ts.addLast(System.currentTimeMillis());
+        }
+    }
 
     public interface Callback {
         void onResult(List<DexCandidate> candidates);
@@ -51,6 +89,7 @@ public class DexMarketClient {
                     StringBuilder sb = new StringBuilder();
                     for (String a : batch) { if (sb.length() > 0) sb.append(','); sb.append(a); }
                     try {
+                        acquirePairSlot();
                         JSONObject resp = httpGet(API + "/latest/dex/tokens/" + sb);
                         if (resp == null) continue;
                         JSONArray pairs = resp.optJSONArray("pairs");
@@ -73,6 +112,7 @@ public class DexMarketClient {
 
     private static void collectChainAddresses(String url, String chain, Set<String> out, int max) {
         try {
+            acquireProfileSlot();
             JSONArray arr = httpGetArray(url);
             if (arr == null) return;
             for (int i = 0; i < arr.length() && out.size() < max; i++) {
@@ -81,6 +121,8 @@ public class DexMarketClient {
                 String addr = item.optString("tokenAddress", "");
                 if (!addr.isEmpty()) out.add(addr);
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         } catch (Exception e) { Log.w(TAG, "collectChainAddresses error: " + e.getMessage()); }
     }
 
@@ -128,6 +170,7 @@ public class DexMarketClient {
                     for (String a : batch) { if (sb.length() > 0) sb.append(','); sb.append(a); }
                     String url = API + "/latest/dex/tokens/" + sb;
                     try {
+                        acquirePairSlot();
                         JSONObject resp = httpGet(url);
                         if (resp == null) continue;
                         JSONArray pairs = resp.optJSONArray("pairs");
@@ -154,6 +197,7 @@ public class DexMarketClient {
 
     private static void collectAddresses(String url, Set<String> out, int max) {
         try {
+            acquireProfileSlot();
             JSONArray arr = httpGetArray(url);
             if (arr == null) return;
             for (int i = 0; i < arr.length() && out.size() < max; i++) {
@@ -163,6 +207,8 @@ public class DexMarketClient {
                 String addr = item.optString("tokenAddress", "");
                 if (!addr.isEmpty()) out.add(addr);
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         } catch (Exception e) {
             Log.w(TAG, "collectAddresses error: " + e.getMessage());
         }
@@ -233,6 +279,12 @@ public class DexMarketClient {
 
             if (c.fdv > 0 && c.liquidityUsd > 0)
                 c.fdvLiquidityRatio = c.fdv / c.liquidityUsd;
+
+            // Derived ratios
+            int total24 = c.buys24h + c.sells24h;
+            c.volLiqRatio  = c.liquidityUsd > 0 ? c.volumeUsd24h / c.liquidityUsd : 0;
+            c.buyPressure  = total24 > 0 ? (double) c.buys24h / total24 : 0.5;
+            c.dataFetchedAtMs = System.currentTimeMillis();
 
             if (c.tokenAddress.isEmpty()) return null;
             return c;

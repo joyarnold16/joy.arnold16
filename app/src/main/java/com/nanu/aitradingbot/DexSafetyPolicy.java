@@ -71,7 +71,27 @@ public class DexSafetyPolicy {
         int patAdj = CandlePatterns.scoreAdj(c.patterns);
         s += Math.max(-10, Math.min(15, patAdj));
 
+        // ── On-chain safety score (0–20) ─────────────────────────────
+        // Populated by SolanaChecker / BscChecker before entry
+        if (c.chainSafetyScore > 0) s += Math.min(20, c.chainSafetyScore);
+
+        // ── Sell simulation (–10 to +10) ─────────────────────────────
+        if (c.sellSimOk) s += 10;
+        else             s -= 10;
+
         return Math.max(0, Math.min(100, s));
+    }
+
+    /**
+     * Stage band from master score.
+     * REJECT (≤40) / WATCH (41-60) / PAPER (61-75) / SMALL_LIVE (76-90) / LIVE (91-100)
+     */
+    public static String stageBand(int score) {
+        if (score >= 91) return "LIVE";
+        if (score >= 76) return "SMALL_LIVE";
+        if (score >= 61) return "PAPER";
+        if (score >= 41) return "WATCH";
+        return "REJECT";
     }
 
     /**

@@ -29,13 +29,17 @@ public class SolanaChecker {
         public double  topHolderPct           = 100;   // % held by largest account
         public int     safetyScore            = 0;     // 0–20 pts added to master score
         public String  note                   = "";
+        // Hard-block fields (only set when RPC data was actually received)
+        public boolean rpcSucceeded    = false;
+        public boolean isHardBlocked   = false;
+        public String  hardBlockReason = "";
     }
 
     public static Result check(String mintAddress) {
         Result r = new Result();
         if (mintAddress == null || mintAddress.isEmpty()) return r;
         try {
-            parseMintAuthority(mintAddress, r);
+            r.rpcSucceeded = parseMintAuthority(mintAddress, r);
         } catch (Exception e) {
             Log.w(TAG, "mintAuthority check failed: " + e.getMessage());
         }
@@ -48,10 +52,23 @@ public class SolanaChecker {
         if (r.mintAuthorityRevoked)   r.safetyScore += 8;
         if (r.freezeAuthorityRevoked) r.safetyScore += 7;
         if (r.holderConcentrationOk)  r.safetyScore += 5;
+        // Hard block only when RPC confirmed data — fail-open if RPC is down
+        if (r.rpcSucceeded) {
+            if (!r.mintAuthorityRevoked && !r.freezeAuthorityRevoked) {
+                r.isHardBlocked   = true;
+                r.hardBlockReason = "Mint + freeze authority both active";
+            } else if (!r.mintAuthorityRevoked) {
+                r.isHardBlocked   = true;
+                r.hardBlockReason = "Mint authority NOT revoked";
+            } else if (!r.freezeAuthorityRevoked) {
+                r.isHardBlocked   = true;
+                r.hardBlockReason = "Freeze authority NOT revoked";
+            }
+        }
         return r;
     }
 
-    private static void parseMintAuthority(String mint, Result r) throws Exception {
+    private static boolean parseMintAuthority(String mint, Result r) throws Exception {
         JSONObject body = new JSONObject()
             .put("jsonrpc", "2.0").put("id", 1)
             .put("method", "getAccountInfo")
@@ -60,23 +77,24 @@ public class SolanaChecker {
                 .put(new JSONObject().put("encoding", "jsonParsed")));
 
         JSONObject resp = rpcCall(body.toString());
-        if (resp == null) return;
+        if (resp == null) return false;
         JSONObject result = resp.optJSONObject("result");
-        if (result == null) return;
+        if (result == null) return false;
         JSONObject value = result.optJSONObject("value");
-        if (value == null) return;
+        if (value == null) return false;
         JSONObject data = value.optJSONObject("data");
-        if (data == null) return;
+        if (data == null) return false;
         JSONObject parsed = data.optJSONObject("parsed");
-        if (parsed == null) return;
+        if (parsed == null) return false;
         JSONObject info = parsed.optJSONObject("info");
-        if (info == null) return;
+        if (info == null) return false;
 
         String mintAuth   = info.optString("mintAuthority",   "null");
         String freezeAuth = info.optString("freezeAuthority", "null");
         r.mintAuthorityRevoked   = "null".equals(mintAuth)   || mintAuth.trim().isEmpty();
         r.freezeAuthorityRevoked = "null".equals(freezeAuth) || freezeAuth.trim().isEmpty();
         r.note += "Mint:" + (r.mintAuthorityRevoked ? "✓" : "⚠") + " Freeze:" + (r.freezeAuthorityRevoked ? "✓" : "⚠") + " ";
+        return true;
     }
 
     private static void parseHolderConcentration(String mint, Result r) throws Exception {

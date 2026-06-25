@@ -108,6 +108,81 @@ public class TelegramBot {
             CandlePatterns.summary(c.patterns), onChain));
     }
 
+    public static void notifyHoneypot(DexAppStore store, DexCandidate c) {
+        String chain = "bsc".equals(c.chain) ? "BNB" : "SOL";
+        send(store, String.format(
+            "⛔ <b>Nanu AI — HONEYPOT DETECTED</b>\n"
+            + "Token: <b>%s (%s)</b> | Chain: %s\n"
+            + "Score: %d | Liq: $%s\n"
+            + "Reason: %s",
+            c.name, c.symbol, chain, c.score, fmtK(c.liquidityUsd),
+            c.onChainNote.isEmpty() ? "Sell simulation failed" : c.onChainNote));
+    }
+
+    public static void notifyMintActive(DexAppStore store, DexCandidate c) {
+        String chain = "bsc".equals(c.chain) ? "BNB" : "SOL";
+        send(store, String.format(
+            "⚠ <b>Nanu AI — MINT AUTHORITY ACTIVE</b>\n"
+            + "Token: <b>%s (%s)</b> | Chain: %s\n"
+            + "Mint authority NOT revoked — supply can be inflated.\n"
+            + "Token BLOCKED from entry.",
+            c.name, c.symbol, chain));
+    }
+
+    public static void notifyFreezeActive(DexAppStore store, DexCandidate c) {
+        String chain = "bsc".equals(c.chain) ? "BNB" : "SOL";
+        send(store, String.format(
+            "⚠ <b>Nanu AI — FREEZE AUTHORITY ACTIVE</b>\n"
+            + "Token: <b>%s (%s)</b> | Chain: %s\n"
+            + "Freeze authority NOT revoked — accounts can be frozen.\n"
+            + "Token BLOCKED from entry.",
+            c.name, c.symbol, chain));
+    }
+
+    public static void notifyOwnerRisk(DexAppStore store, DexCandidate c, String flags) {
+        String chain = "bsc".equals(c.chain) ? "BNB" : "SOL";
+        boolean hardBlock = flags.contains("BLACKLIST");
+        String icon = hardBlock ? "⛔" : "⚠";
+        send(store, String.format(
+            "%s <b>Nanu AI — OWNER RISK</b>\n"
+            + "Token: <b>%s (%s)</b> | Chain: %s\n"
+            + "Owner powers: <b>%s</b>\n"
+            + "%s",
+            icon, c.name, c.symbol, chain, flags,
+            hardBlock ? "BLACKLIST found — token BLOCKED." : "Score reduced, watch closely."));
+    }
+
+    public static void notifyLiquidityDrop(DexAppStore store, TradeRecord r, double dropPct) {
+        String chain = "bsc".equals(r.chain) ? "BNB" : "SOL";
+        send(store, String.format(
+            "⚠ <b>Nanu AI — LIQUIDITY DROP</b>\n"
+            + "Token: <b>%s</b> | Chain: %s\n"
+            + "Liquidity fell <b>%.1f%%</b> since entry.\n"
+            + "Triggering emergency exit.",
+            r.tokenName, chain, dropPct));
+    }
+
+    public static void notifyEmergencyStop(DexAppStore store, String reason) {
+        send(store, String.format(
+            "⛔ <b>Nanu AI — BOT HALTED</b>\n"
+            + "Reason: <b>%s</b>\n"
+            + "No new trades until manually restarted.",
+            reason));
+    }
+
+    public static void notifyDailyReport(DexAppStore store) {
+        int    trades   = store.totalTrades;
+        double pnl      = store.totalPnlUsd;
+        double wr       = store.mlWinRate;
+        String icon     = pnl >= 0 ? "✅" : "❌";
+        send(store, String.format(
+            "📊 <b>Nanu AI — Daily Report</b>\n"
+            + "%s PnL: <b>%+.2f USD</b>\n"
+            + "Trades: %d | Win rate: %.0f%%\n"
+            + "Daily PnL: %+.2f USD",
+            icon, pnl, trades, wr, store.dailyPnlUsd));
+    }
+
     // ─ HELPERS ────────────────────────────────────────────────────
 
     private static String fmtK(double v) {

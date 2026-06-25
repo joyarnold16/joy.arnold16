@@ -34,10 +34,15 @@ public class TradeRecord {
     public int    scamScore        = 0;
 
     // Algo trading fields
-    public int    entryAlgoScore = 0;
-    public int    exitAlgoScore  = 0;
-    public String algoSignal     = "";
-    public double peakPrice      = 0;    // highest price seen while open (trailing stop)
+    public int    entryAlgoScore  = 0;
+    public int    exitAlgoScore   = 0;
+    public String algoSignal      = "";
+    public double peakPrice       = 0;    // highest price seen while open (trailing stop)
+
+    // Safety snapshot at entry
+    public int     chainSafetyScore = 0;  // 0-20 from on-chain checker
+    public boolean sellSimOk        = true;
+    public double  liquidityLow     = 0;  // lowest liquidity seen during hold (liq-drop monitor)
 
     public long holdingTimeMs() {
         return closeTimeMs > 0 && openTimeMs > 0 ? closeTimeMs - openTimeMs : 0;

@@ -186,9 +186,25 @@ public class DexEngine {
     private void drainQueue() {
         store.reload();
         store.rolloverDayIfNeeded();
+        store.rolloverWeekIfNeeded();
 
         if (store.isDailyLossLimitHit()) {
             Log.w(TAG, "Daily loss limit $" + store.maxDailyLossUsd + " hit. No new entries.");
+            return;
+        }
+
+        // Loss-streak halt
+        if (store.isDayLossStreakHit()) {
+            String msg = "Loss streak " + store.curDayLossStreak + " hit (max "
+                + store.maxDayLossStreak + "). No new entries today.";
+            Log.w(TAG, msg);
+            TelegramBot.notifyEmergencyStop(store, msg);
+            return;
+        }
+
+        // Weekly loss limit
+        if (store.isWeeklyLossLimitHit()) {
+            Log.w(TAG, "Weekly loss limit $" + store.maxWeeklyLossUsd + " hit.");
             return;
         }
 
@@ -208,17 +224,40 @@ public class DexEngine {
             DexCandidate c = it.next();
             queue.remove(c);
 
+            // Staleness gate: skip candidates older than 5 minutes
+            long ageMs = System.currentTimeMillis() - c.dataFetchedAtMs;
+            if (ageMs > 5 * 60_000L) {
+                Log.d(TAG, "Queue skip (stale " + ageMs / 1000 + "s): " + c.symbol);
+                continue;
+            }
+
             // Re-check safety with fresh settings
             String block = DexSafetyPolicy.check(c, store);
             if (block != null) {
                 Log.d(TAG, "Queue skip (re-check): " + c.symbol + " | " + block);
+                NanuDatabase.get(ctx).insertRejected(c, block);
                 continue;
             }
             if (alreadyOpen(c.tokenAddress)) continue;
 
+            // Per-chain exposure cap
+            if (store.maxChainExposureUsd > 0) {
+                double chainExp = store.getChainExposureUsd(c.chain);
+                if (chainExp >= store.maxChainExposureUsd) {
+                    Log.d(TAG, "Queue skip (chain exposure $" + chainExp + " >= cap): " + c.symbol);
+                    continue;
+                }
+            }
+
+            // Dynamic position size
+            double orderSize = store.calcDynamicPositionSize(c);
+            if (orderSize <= 0) {
+                Log.d(TAG, "Queue skip (chain exposure full): " + c.symbol);
+                continue;
+            }
+
             // Order size vs. liquidity guard: don't take >0.5% of pool
-            double orderSize = store.liveMode ? store.tradeAmountUsd : store.paperTradeAmountUsd;
-            if (c.liquidityUsd > 0 && orderSize > 0 && orderSize / c.liquidityUsd > 0.005) {
+            if (c.liquidityUsd > 0 && orderSize / c.liquidityUsd > 0.005) {
                 Log.d(TAG, "Queue skip (order " + orderSize + " > 0.5% of liq " + c.liquidityUsd + "): " + c.symbol);
                 continue;
             }
@@ -238,56 +277,123 @@ public class DexEngine {
                 continue;
             }
 
-            openPosition(c, sig);
+            // Stage-band routing (evaluated after on-chain score is incorporated)
+            String band = c.stageBand != null ? c.stageBand : DexSafetyPolicy.stageBand(c.score);
+            if ("REJECT".equals(band) || "WATCH".equals(band)) {
+                Log.d(TAG, "Queue skip (stage=" + band + " score=" + c.score + "): " + c.symbol);
+                continue;
+            }
+            // PAPER band → force paper mode regardless of liveMode setting
+            boolean forcePaper = "PAPER".equals(band);
+            // SMALL_LIVE band → reduce size by 50%
+            if ("SMALL_LIVE".equals(band) && store.liveMode) orderSize *= 0.5;
+
+            openPosition(c, sig, orderSize, forcePaper);
         }
     }
 
     /**
      * Tier 3: on-chain safety checks before live/paper entry.
-     * Returns false only for hard failures (honeypot detected, extreme sell tax).
-     * Soft warnings update the candidate's fields but don't block entry.
+     * Returns false for hard failures; soft warnings adjust score but don't block.
+     * After checks, recalculates c.score and c.stageBand.
      */
     private boolean onChainSafe(DexCandidate c) {
+        NanuDatabase db = NanuDatabase.get(ctx);
         try {
             if ("solana".equals(c.chain)) {
                 SolanaChecker.Result r = SolanaChecker.check(c.tokenAddress);
                 c.mintAuthorityRevoked   = r.mintAuthorityRevoked;
                 c.freezeAuthorityRevoked = r.freezeAuthorityRevoked;
-                c.onChainNote = r.note;
-                // Compute rough scam risk: unrevoked authorities are red flags but not a hard block
-                c.scamRiskScore = 100 - r.safetyScore;
+                c.chainSafetyScore       = r.safetyScore;
+                c.onChainNote            = r.note;
+                c.scamRiskScore          = 100 - r.safetyScore;
                 Log.d(TAG, "SOL on-chain " + c.symbol + ": " + r.note);
+                db.cacheOnChain(c);
+
+                // Hard block: RPC confirmed active authority
+                if (r.isHardBlocked) {
+                    Log.w(TAG, "SOL HARD BLOCK (" + r.hardBlockReason + "): " + c.symbol);
+                    if (!r.mintAuthorityRevoked)   TelegramBot.notifyMintActive(store, c);
+                    if (!r.freezeAuthorityRevoked) TelegramBot.notifyFreezeActive(store, c);
+                    db.insertRejected(c, r.hardBlockReason);
+                    return false;
+                }
+
+                // Sell simulation (soft)
+                SellSimulator.Result sim = SellSimulator.checkSolana(c.tokenAddress, store.slippageBps);
+                c.sellSimOk     = sim.simOk;
+                c.sellImpactPct = sim.impactPct;
+                c.sellSimNote   = sim.note;
+                db.insertSellSim(c.tokenAddress, c.chain, sim.simOk, sim.impactPct, sim.note);
+
             } else if ("bsc".equals(c.chain)) {
-                BscChecker.Result r = BscChecker.check(c.tokenAddress);
+                BscChecker.Result r = BscChecker.check(c.tokenAddress, c.pairAddress);
                 c.contractVerified = r.contractVerified;
                 c.ownerRenounced   = r.ownerRenounced;
+                c.lpBurned         = r.lpBurned;
+                c.ownerPowerFlags  = r.ownerPowerFlags;
+                c.chainSafetyScore = r.safetyScore;
                 c.onChainNote      = r.note;
                 c.scamRiskScore    = 100 - r.safetyScore;
                 Log.d(TAG, "BSC on-chain " + c.symbol + ": " + r.note);
-                // Hard blocks for BSC
+                db.cacheOnChain(c);
+
+                // Hard blocks
                 if (r.isHoneypot) {
                     Log.w(TAG, "BSC HONEYPOT: " + c.symbol);
+                    TelegramBot.notifyHoneypot(store, c);
+                    db.insertRejected(c, "honeypot");
+                    return false;
+                }
+                if (!r.canSell) {
+                    Log.w(TAG, "BSC canSell=false: " + c.symbol);
+                    TelegramBot.notifyHoneypot(store, c);
+                    db.insertRejected(c, "canSell=false");
+                    return false;
+                }
+                if (r.hasBlacklist) {
+                    Log.w(TAG, "BSC BLACKLIST in source: " + c.symbol);
+                    TelegramBot.notifyOwnerRisk(store, c, r.ownerPowerFlags);
+                    db.insertRejected(c, "blacklist_capability");
                     return false;
                 }
                 if (r.sellTaxPct > 10) {
                     Log.w(TAG, "BSC sell tax " + r.sellTaxPct + "% too high: " + c.symbol);
                     return false;
                 }
+                // Soft warn for other owner powers
+                if (!r.ownerPowerFlags.isEmpty()) {
+                    Log.d(TAG, "BSC owner powers (" + r.ownerPowerFlags + "): " + c.symbol);
+                    TelegramBot.notifyOwnerRisk(store, c, r.ownerPowerFlags);
+                }
+
+                // Sell simulation comes from BscChecker
+                SellSimulator.Result sim = SellSimulator.checkBsc(r);
+                c.sellSimOk     = sim.simOk;
+                c.sellImpactPct = sim.impactPct;
+                c.sellSimNote   = sim.note;
+                db.insertSellSim(c.tokenAddress, c.chain, sim.simOk, sim.impactPct, sim.note);
             }
         } catch (Exception e) {
             // On-chain check failure is non-blocking (RPC may be down)
             Log.w(TAG, "on-chain check error for " + c.symbol + ": " + e.getMessage());
         }
+
+        // Recalculate score and stage band incorporating on-chain + sell-sim results
+        c.score     = DexSafetyPolicy.score(c, store);
+        c.stageBand = DexSafetyPolicy.stageBand(c.score);
         return true;
     }
 
     // ─ OPEN POSITION ─────────────────────────────────────────────
 
-    private void openPosition(DexCandidate c, AlgoEngine.Signal sig) {
-        if (store.liveMode) {
+    private void openPosition(DexCandidate c, AlgoEngine.Signal sig,
+                              double orderSize, boolean forcePaper) {
+        boolean goLive = store.liveMode && !forcePaper;
+        if (goLive) {
             SwapEngine.buy(store, c, new SwapEngine.SwapCallback() {
                 @Override public void onSuccess(String txHash, double price) {
-                    TradeRecord r = store.openPosition(c);
+                    TradeRecord r = store.openPosition(c, orderSize);
                     r.buyTxHash      = txHash;
                     r.entryAlgoScore = sig.score;
                     r.algoSignal     = sig.type;
@@ -301,7 +407,7 @@ public class DexEngine {
                 }
             });
         } else {
-            TradeRecord r    = store.openPosition(c);
+            TradeRecord r    = store.openPosition(c, orderSize);
             r.entryAlgoScore = sig.score;
             r.algoSignal     = sig.type;
             r.peakPrice      = c.priceUsd;
@@ -311,17 +417,8 @@ public class DexEngine {
     }
 
     private void updateHistoryRecord(TradeRecord updated) {
-        List<TradeRecord> hist = store.loadHistory();
-        for (TradeRecord h : hist) {
-            if (updated.id.equals(h.id)) {
-                h.buyTxHash      = updated.buyTxHash;
-                h.entryAlgoScore = updated.entryAlgoScore;
-                h.algoSignal     = updated.algoSignal;
-                h.peakPrice      = updated.peakPrice;
-                break;
-            }
-        }
-        store.saveHistory(hist);
+        // NanuDatabase upsert handles field updates directly
+        NanuDatabase.get(ctx).upsertTrade(updated);
     }
 
     // ─ MONITOR LOOP ─────────────────────────────────────────────
@@ -356,9 +453,7 @@ public class DexEngine {
                 // Update trailing peak
                 if (store.useTrailingStop && current > r.peakPrice) {
                     r.peakPrice = current;
-                    List<TradeRecord> hist = store.loadHistory();
-                    for (TradeRecord h : hist) if (r.id.equals(h.id)) { h.peakPrice = current; break; }
-                    store.saveHistory(hist);
+                    NanuDatabase.get(ctx).upsertTrade(r);
                 }
 
                 // Trailing stop
@@ -390,8 +485,25 @@ public class DexEngine {
                 else if (heldMin >= rp.holdMin)
                     reason = "force_close";
 
+                // Liquidity-drop exit: >30% liq drop since entry = rug risk
+                else if (r.liquidityAtEntry > 0 && live.liquidityUsd > 0) {
+                    double liqDrop = (r.liquidityAtEntry - live.liquidityUsd)
+                        / r.liquidityAtEntry * 100.0;
+                    // Track lowest liquidity seen
+                    if (r.liquidityLow <= 0 || live.liquidityUsd < r.liquidityLow) {
+                        r.liquidityLow = live.liquidityUsd;
+                        NanuDatabase.get(ctx).upsertTrade(r);
+                    }
+                    if (liqDrop >= 30.0) {
+                        Log.w(TAG, "Liq drop " + String.format("%.1f", liqDrop)
+                            + "% for " + r.tokenSymbol + " — emergency exit");
+                        TelegramBot.notifyLiquidityDrop(store, r, liqDrop);
+                        reason = "liq_drop_exit";
+                    }
+                }
+
                 // Algo signal exit: bearish / sell-pressure / RSI overbought
-                else {
+                if (reason == null) {
                     live.patterns = CandlePatterns.detect(live);
                     int exitSc = AlgoEngine.exitScore(live, pct);
                     if (exitSc < 25)
