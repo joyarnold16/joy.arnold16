@@ -635,7 +635,12 @@ public class DexEngine {
         TelegramBot.notifyClose(store, r);
         TradeService.notifyClosed(ctx, r);
         NanuDatabase.get(ctx).insertWalletEvent(r.chain, "trade_close", r.sellTxHash, r.pnlUsd);
-        if (store.autoMode) BotEvolution.evolve(store);
+        if (store.autoMode) {
+            BotEvolution.evolve(store);
+            double avgPnl = store.totalTrades > 0 ? store.totalPnlUsd / store.totalTrades : 0;
+            NanuDatabase.get(ctx).recordStratPerf(store.mlStrategy, store.mlGeneration,
+                store.mlWinRate, avgPnl, store.totalTrades);
+        }
         if (listener != null) listener.onPositionClosed(r);
         Log.i(TAG, "Closed: " + r.tokenSymbol + " P/L=" + String.format("%.4f", r.pnlUsd));
     }
