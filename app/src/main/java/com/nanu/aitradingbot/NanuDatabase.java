@@ -22,7 +22,7 @@ import java.util.UUID;
 public class NanuDatabase extends SQLiteOpenHelper {
     private static final String TAG     = "NanuDB";
     private static final String DB_NAME = "nanu_trading.db";
-    private static final int    DB_VER  = 1;
+    private static final int    DB_VER  = 2;
 
     private static volatile NanuDatabase instance;
 
@@ -57,7 +57,7 @@ public class NanuDatabase extends SQLiteOpenHelper {
             + "algo_entry INTEGER DEFAULT 0, algo_exit INTEGER DEFAULT 0, "
             + "algo_signal TEXT DEFAULT '', peak_price REAL DEFAULT 0, "
             + "chain_safety INTEGER DEFAULT 0, sell_sim_ok INTEGER DEFAULT 1, "
-            + "liq_low REAL DEFAULT 0, created_ms INTEGER)");
+            + "liq_low REAL DEFAULT 0, trailing_sl REAL DEFAULT 0, created_ms INTEGER)");
 
         db.execSQL("CREATE TABLE IF NOT EXISTS rejected_tokens ("
             + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -132,7 +132,10 @@ public class NanuDatabase extends SQLiteOpenHelper {
             + "amount_usd REAL, occurred_at_ms INTEGER)");
     }
 
-    @Override public void onUpgrade(SQLiteDatabase db, int oldV, int newV) {}
+    @Override public void onUpgrade(SQLiteDatabase db, int oldV, int newV) {
+        if (oldV < 2)
+            db.execSQL("ALTER TABLE trades ADD COLUMN trailing_sl REAL DEFAULT 0");
+    }
 
     // ─ TRADES ────────────────────────────────────────────────────────────────
 
@@ -458,6 +461,7 @@ public class NanuDatabase extends SQLiteOpenHelper {
         v.put("chain_safety",  r.chainSafetyScore);
         v.put("sell_sim_ok",   r.sellSimOk ? 1 : 0);
         v.put("liq_low",       r.liquidityLow);
+        v.put("trailing_sl",   r.trailingSl);
         return v;
     }
 
@@ -495,6 +499,7 @@ public class NanuDatabase extends SQLiteOpenHelper {
         r.chainSafetyScore = i(c, "chain_safety");
         r.sellSimOk        = i(c, "sell_sim_ok") == 1;
         r.liquidityLow     = d(c, "liq_low");
+        r.trailingSl       = d(c, "trailing_sl");
         return r;
     }
 

@@ -44,6 +44,10 @@ public class TradeRecord {
     public boolean sellSimOk        = true;
     public double  liquidityLow     = 0;  // lowest liquidity seen during hold (liq-drop monitor)
 
+    // Price-locked trailing SL: always (entryPrice * sl%) below the highest price seen.
+    // Initialized at open; ratchets up as peakPrice rises; never moves down.
+    public double trailingSl = 0;
+
     public long holdingTimeMs() {
         return closeTimeMs > 0 && openTimeMs > 0 ? closeTimeMs - openTimeMs : 0;
     }

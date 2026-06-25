@@ -393,11 +393,13 @@ public class DexEngine {
         if (goLive) {
             SwapEngine.buy(store, c, new SwapEngine.SwapCallback() {
                 @Override public void onSuccess(String txHash, double price) {
-                    TradeRecord r = store.openPosition(c, orderSize);
+                    TradeRecord r    = store.openPosition(c, orderSize);
                     r.buyTxHash      = txHash;
                     r.entryAlgoScore = sig.score;
                     r.algoSignal     = sig.type;
                     r.peakPrice      = price;
+                    RiskParams rp    = effectiveRisk(r.amountUsd, store);
+                    r.trailingSl     = r.entryPrice * (1.0 - rp.sl / 100.0);
                     updateHistoryRecord(r);
                     DexEngine.this.notify(r);
                 }
@@ -411,6 +413,8 @@ public class DexEngine {
             r.entryAlgoScore = sig.score;
             r.algoSignal     = sig.type;
             r.peakPrice      = c.priceUsd;
+            RiskParams rp    = effectiveRisk(r.amountUsd, store);
+            r.trailingSl     = r.entryPrice * (1.0 - rp.sl / 100.0);
             updateHistoryRecord(r);
             notify(r);
         }
@@ -450,14 +454,27 @@ public class DexEngine {
                 double pct     = (current - r.entryPrice) / r.entryPrice * 100.0;
                 long   heldMin = (System.currentTimeMillis() - r.openTimeMs) / 60_000L;
 
-                // Update trailing peak
-                if (store.useTrailingStop && current > r.peakPrice) {
-                    r.peakPrice = current;
-                    NanuDatabase.get(ctx).upsertTrade(r);
-                }
+                // Fixed absolute distance used to anchor the trailing SL
+                double trailDistance = r.entryPrice * rp.sl / 100.0;
 
-                // Trailing stop
-                double trailDrop = store.useTrailingStop && r.peakPrice > r.entryPrice
+                // Update trailing peak; also ratchet the trailing SL price upward
+                boolean dirty = false;
+                if (current > r.peakPrice) {
+                    r.peakPrice = current;
+                    dirty = true;
+                }
+                // Trailing SL: always (trailDistance) below the peak; only moves up, never down
+                if (r.trailingSl == 0)
+                    r.trailingSl = r.entryPrice - trailDistance; // init for legacy trades
+                double newSl = r.peakPrice - trailDistance;
+                if (newSl > r.trailingSl) {
+                    r.trailingSl = newSl;
+                    dirty = true;
+                }
+                if (dirty) NanuDatabase.get(ctx).upsertTrade(r);
+
+                // Trailing stop (percentage-from-peak, only after price has risen 0.5%)
+                double trailDrop = r.peakPrice > r.entryPrice
                     ? (r.peakPrice - current) / r.peakPrice * 100.0 : -1;
 
                 String reason = null;
@@ -477,8 +494,8 @@ public class DexEngine {
                          && pct <= 0)
                     reason = "break_even_stop";
 
-                // Stop loss
-                else if (pct <= -rp.sl)
+                // Price-locked trailing SL: exit when price falls below the ratcheted SL price
+                else if (current <= r.trailingSl)
                     reason = "stop_loss";
 
                 // Force close on max hold time
