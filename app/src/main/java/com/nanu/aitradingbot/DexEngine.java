@@ -293,7 +293,7 @@ public class DexEngine {
                     r.algoSignal     = sig.type;
                     r.peakPrice      = price;
                     updateHistoryRecord(r);
-                    notify(r);
+                    DexEngine.this.notify(r);
                 }
                 @Override public void onFail(String reason) {
                     Log.w(TAG, "Live buy failed: " + reason);
