@@ -235,7 +235,9 @@ public class DexEngine {
             String block = DexSafetyPolicy.check(c, store);
             if (block != null) {
                 Log.d(TAG, "Queue skip (re-check): " + c.symbol + " | " + block);
-                NanuDatabase.get(ctx).insertRejected(c, block);
+                NanuDatabase db = NanuDatabase.get(ctx);
+                db.insertRejected(c, block);
+                db.insertRiskCheck(c.tokenAddress, c.chain, "POLICY_BLOCKED", block, 0, c.liquidityUsd);
                 continue;
             }
             if (alreadyOpen(c.tokenAddress)) continue;
@@ -259,6 +261,8 @@ public class DexEngine {
             // Order size vs. liquidity guard: don't take >0.5% of pool
             if (c.liquidityUsd > 0 && orderSize / c.liquidityUsd > 0.005) {
                 Log.d(TAG, "Queue skip (order " + orderSize + " > 0.5% of liq " + c.liquidityUsd + "): " + c.symbol);
+                NanuDatabase.get(ctx).insertRiskCheck(c.tokenAddress, c.chain,
+                    "LIQ_GUARD", "order " + (int) orderSize + " > 0.5% of liq", orderSize, c.liquidityUsd);
                 continue;
             }
 
@@ -266,6 +270,8 @@ public class DexEngine {
             AlgoEngine.Signal sig = AlgoEngine.entrySignal(c);
             if (!sig.isGoodEntry(store.minAlgoScore)) {
                 Log.d(TAG, "Queue skip (algo " + sig.score + "<" + store.minAlgoScore + "): " + c.symbol);
+                NanuDatabase.get(ctx).insertRiskCheck(c.tokenAddress, c.chain,
+                    "ALGO_LOW", "score " + sig.score + "<" + store.minAlgoScore, orderSize, c.liquidityUsd);
                 continue;
             }
             c.algoSignal = sig.type;
@@ -281,8 +287,13 @@ public class DexEngine {
             String band = c.stageBand != null ? c.stageBand : DexSafetyPolicy.stageBand(c.score);
             if ("REJECT".equals(band) || "WATCH".equals(band)) {
                 Log.d(TAG, "Queue skip (stage=" + band + " score=" + c.score + "): " + c.symbol);
+                NanuDatabase.get(ctx).insertRiskCheck(c.tokenAddress, c.chain,
+                    "STAGE_" + band, "score=" + c.score, orderSize, c.liquidityUsd);
                 continue;
             }
+            // Record the passing signal
+            NanuDatabase.get(ctx).insertSignal(c, true);
+
             // PAPER band → force paper mode regardless of liveMode setting
             boolean forcePaper = "PAPER".equals(band);
             // SMALL_LIVE band → reduce size by 50%
@@ -377,6 +388,7 @@ public class DexEngine {
         } catch (Exception e) {
             // On-chain check failure is non-blocking (RPC may be down)
             Log.w(TAG, "on-chain check error for " + c.symbol + ": " + e.getMessage());
+            NanuDatabase.get(ctx).logError("onchain", c.symbol + ": " + e.getMessage());
         }
 
         // Recalculate score and stage band incorporating on-chain + sell-sim results
@@ -390,6 +402,11 @@ public class DexEngine {
     private void openPosition(DexCandidate c, AlgoEngine.Signal sig,
                               double orderSize, boolean forcePaper) {
         boolean goLive = store.liveMode && !forcePaper;
+        NanuDatabase db = NanuDatabase.get(ctx);
+        db.insertSnapshot(c);
+        db.upsertToken(c);
+        db.upsertPair(c);
+
         if (goLive) {
             SwapEngine.buy(store, c, new SwapEngine.SwapCallback() {
                 @Override public void onSuccess(String txHash, double price) {
@@ -405,6 +422,7 @@ public class DexEngine {
                 }
                 @Override public void onFail(String reason) {
                     Log.w(TAG, "Live buy failed: " + reason);
+                    NanuDatabase.get(ctx).logError("buy_failed", c.symbol + ": " + reason);
                     if (listener != null) listener.onError("Buy failed: " + reason);
                 }
             });
@@ -535,6 +553,7 @@ public class DexEngine {
                 }
             } catch (Exception e) {
                 Log.w(TAG, "Monitor error for " + r.tokenSymbol + ": " + e.getMessage());
+                NanuDatabase.get(ctx).logError("monitor", r.tokenSymbol + ": " + e.getMessage());
             }
         }
     }
@@ -607,6 +626,7 @@ public class DexEngine {
     private void notify(TradeRecord r) {
         TelegramBot.notifyOpen(store, r);
         TradeService.notifyOpened(ctx, r);
+        NanuDatabase.get(ctx).insertWalletEvent(r.chain, "trade_open", r.buyTxHash, r.amountUsd);
         if (listener != null) listener.onPositionOpened(r);
         Log.i(TAG, "Opened: " + r.tokenSymbol + " @ " + r.entryPrice);
     }
@@ -614,6 +634,7 @@ public class DexEngine {
     private void notifyClose(TradeRecord r) {
         TelegramBot.notifyClose(store, r);
         TradeService.notifyClosed(ctx, r);
+        NanuDatabase.get(ctx).insertWalletEvent(r.chain, "trade_close", r.sellTxHash, r.pnlUsd);
         if (store.autoMode) BotEvolution.evolve(store);
         if (listener != null) listener.onPositionClosed(r);
         Log.i(TAG, "Closed: " + r.tokenSymbol + " P/L=" + String.format("%.4f", r.pnlUsd));

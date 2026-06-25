@@ -72,6 +72,13 @@ public class DexAppStore {
     // Per-chain exposure cap (0 = disabled)
     public double maxChainExposureUsd = 0;
 
+    // Paper vs live P&L tracked separately
+    public double paperTotalPnlUsd = 0;
+    public double liveTotalPnlUsd  = 0;
+
+    // BscScan API key (optional, extends rate limit from 5/s to 10/s)
+    public String bscScanApiKey = "";
+
     // Stats
     public int    totalTrades = 0;
     public int    totalWins   = 0;
@@ -136,6 +143,9 @@ public class DexAppStore {
             .putFloat("weekPnl",      (float) weeklyPnlUsd)
             .putLong("lastWeekRoll",  lastWeekRollover)
             .putFloat("maxChainExp",  (float) maxChainExposureUsd)
+            .putFloat("paperPnl",     (float) paperTotalPnlUsd)
+            .putFloat("livePnl",      (float) liveTotalPnlUsd)
+            .putString("bscApiKey",   bscScanApiKey)
             .apply();
     }
 
@@ -183,6 +193,10 @@ public class DexAppStore {
         weeklyPnlUsd        = prefs.getFloat("weekPnl",      0f);
         lastWeekRollover    = prefs.getLong("lastWeekRoll",  0L);
         maxChainExposureUsd = prefs.getFloat("maxChainExp",  0f);
+        paperTotalPnlUsd    = prefs.getFloat("paperPnl",     0f);
+        liveTotalPnlUsd     = prefs.getFloat("livePnl",      0f);
+        bscScanApiKey       = prefs.getString("bscApiKey",   "");
+        BscChecker.apiKey   = bscScanApiKey;
     }
 
     /** One-time migration from SharedPreferences JSON blob to NanuDatabase. */
@@ -209,10 +223,16 @@ public class DexAppStore {
     public void rolloverDayIfNeeded() {
         long today = System.currentTimeMillis() / 86_400_000L;
         if (today != lastTradeDay) {
-            tradesToday       = 0;
-            dailyPnlUsd       = 0;
-            curDayLossStreak  = 0;
-            lastTradeDay      = today;
+            // Persist and report before resetting
+            if (tradesToday > 0) {
+                db.upsertDailyStats(lastTradeDay, totalTrades, totalWins,
+                    dailyPnlUsd, mlWinRate, curDayLossStreak);
+                TelegramBot.notifyDailyReport(this);
+            }
+            tradesToday      = 0;
+            dailyPnlUsd      = 0;
+            curDayLossStreak = 0;
+            lastTradeDay     = today;
             save();
         }
     }
@@ -286,10 +306,7 @@ public class DexAppStore {
 
     /** Sum of amountUsd for all currently open positions on the given chain. */
     public double getChainExposureUsd(String chain) {
-        double total = 0;
-        for (TradeRecord r : getOpenPositions())
-            if (chain.equals(r.chain)) total += r.amountUsd;
-        return total;
+        return db.sumOpenExposure(chain);
     }
 
     public String getMnemonic()         { return secure.loadMnemonic(); }
@@ -356,38 +373,38 @@ public class DexAppStore {
 
     public TradeRecord closePosition(String id, double exitPrice, String reason,
                                      String sellTxHash) {
-        List<TradeRecord> list = loadHistory();
-        TradeRecord closed = null;
-        for (TradeRecord r : list) {
-            if (id.equals(r.id) && r.isOpen) {
-                r.isOpen      = false;
-                r.exitPrice   = exitPrice;
-                r.closeTimeMs = System.currentTimeMillis();
-                r.exitReason  = reason;
-                r.sellTxHash  = sellTxHash != null ? sellTxHash : "";
-                r.pnlPercent  = r.entryPrice > 0
-                    ? (exitPrice - r.entryPrice) / r.entryPrice * 100.0 : 0;
-                r.pnlUsd      = r.amountUsd * r.pnlPercent / 100.0;
-                r.isWin       = r.pnlUsd > 0;
-                totalTrades++;
-                if (r.isWin) {
-                    totalWins++;
-                    curDayLossStreak = 0;  // reset streak on win
-                } else {
-                    lastLossTimeMs    = System.currentTimeMillis();
-                    curDayLossStreak++;    // increment streak on loss
-                }
-                totalPnlUsd += r.pnlUsd;
-                dailyPnlUsd += r.pnlUsd;
-                weeklyPnlUsd += r.pnlUsd;
-                mlWinRate    = totalTrades > 0 ? (double) totalWins / totalTrades * 100.0 : 0;
-                db.upsertTrade(r);
-                closed = r;
-                break;
-            }
+        TradeRecord r = db.getTradeById(id);
+        if (r == null || !r.isOpen) return null;
+
+        long closeMs  = System.currentTimeMillis();
+        r.isOpen      = false;
+        r.exitPrice   = exitPrice;
+        r.closeTimeMs = closeMs;
+        r.exitReason  = reason;
+        r.sellTxHash  = sellTxHash != null ? sellTxHash : "";
+        r.pnlPercent  = r.entryPrice > 0
+            ? (exitPrice - r.entryPrice) / r.entryPrice * 100.0 : 0;
+        r.pnlUsd      = r.amountUsd * r.pnlPercent / 100.0;
+        r.isWin       = r.pnlUsd > 0;
+
+        db.upsertTrade(r);
+
+        totalTrades++;
+        if (r.isWin) {
+            totalWins++;
+            curDayLossStreak = 0;
+        } else {
+            lastLossTimeMs   = closeMs;
+            curDayLossStreak++;
         }
+        totalPnlUsd  += r.pnlUsd;
+        dailyPnlUsd  += r.pnlUsd;
+        weeklyPnlUsd += r.pnlUsd;
+        if (r.isLive) liveTotalPnlUsd  += r.pnlUsd;
+        else          paperTotalPnlUsd += r.pnlUsd;
+        mlWinRate = totalTrades > 0 ? (double) totalWins / totalTrades * 100.0 : 0;
         save();
-        return closed;
+        return r;
     }
 
     public List<TradeRecord> getOpenPositions() {

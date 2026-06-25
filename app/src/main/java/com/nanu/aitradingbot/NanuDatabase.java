@@ -22,7 +22,7 @@ import java.util.UUID;
 public class NanuDatabase extends SQLiteOpenHelper {
     private static final String TAG     = "NanuDB";
     private static final String DB_NAME = "nanu_trading.db";
-    private static final int    DB_VER  = 2;
+    private static final int    DB_VER  = 3;
 
     private static volatile NanuDatabase instance;
 
@@ -57,7 +57,8 @@ public class NanuDatabase extends SQLiteOpenHelper {
             + "algo_entry INTEGER DEFAULT 0, algo_exit INTEGER DEFAULT 0, "
             + "algo_signal TEXT DEFAULT '', peak_price REAL DEFAULT 0, "
             + "chain_safety INTEGER DEFAULT 0, sell_sim_ok INTEGER DEFAULT 1, "
-            + "liq_low REAL DEFAULT 0, trailing_sl REAL DEFAULT 0, created_ms INTEGER)");
+            + "liq_low REAL DEFAULT 0, trailing_sl REAL DEFAULT 0, "
+            + "patterns TEXT DEFAULT '', created_ms INTEGER)");
 
         db.execSQL("CREATE TABLE IF NOT EXISTS rejected_tokens ("
             + "id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -135,6 +136,8 @@ public class NanuDatabase extends SQLiteOpenHelper {
     @Override public void onUpgrade(SQLiteDatabase db, int oldV, int newV) {
         if (oldV < 2)
             db.execSQL("ALTER TABLE trades ADD COLUMN trailing_sl REAL DEFAULT 0");
+        if (oldV < 3)
+            db.execSQL("ALTER TABLE trades ADD COLUMN patterns TEXT DEFAULT ''");
     }
 
     // ─ TRADES ────────────────────────────────────────────────────────────────
@@ -181,6 +184,14 @@ public class NanuDatabase extends SQLiteOpenHelper {
                 "SELECT COUNT(*) FROM trades WHERE is_open=1", null)) {
             return c.moveToFirst() ? c.getInt(0) : 0;
         } catch (Exception e) { return 0; }
+    }
+
+    public TradeRecord getTradeById(String id) {
+        try (Cursor c = getReadableDatabase().query(
+                "trades", null, "id=?", new String[]{id}, null, null, null)) {
+            if (c.moveToFirst()) return cursorToTrade(c);
+        } catch (Exception e) { Log.w(TAG, "getTradeById: " + e.getMessage()); }
+        return null;
     }
 
     public double sumOpenExposure(String chain) {
@@ -462,6 +473,9 @@ public class NanuDatabase extends SQLiteOpenHelper {
         v.put("sell_sim_ok",   r.sellSimOk ? 1 : 0);
         v.put("liq_low",       r.liquidityLow);
         v.put("trailing_sl",   r.trailingSl);
+        StringBuilder ps = new StringBuilder();
+        for (String p : r.patterns) { if (ps.length() > 0) ps.append(","); ps.append(p); }
+        v.put("patterns",      ps.toString());
         return v;
     }
 
@@ -500,6 +514,9 @@ public class NanuDatabase extends SQLiteOpenHelper {
         r.sellSimOk        = i(c, "sell_sim_ok") == 1;
         r.liquidityLow     = d(c, "liq_low");
         r.trailingSl       = d(c, "trailing_sl");
+        String pats = s(c, "patterns");
+        r.patterns = new java.util.ArrayList<>();
+        if (!pats.isEmpty()) for (String p : pats.split(",")) { String t = p.trim(); if (!t.isEmpty()) r.patterns.add(t); }
         return r;
     }
 

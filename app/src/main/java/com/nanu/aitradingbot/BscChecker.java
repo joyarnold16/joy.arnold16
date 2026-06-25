@@ -18,6 +18,13 @@ public class BscChecker {
     private static final String HONEYPOT_API = "https://api.honeypot.is/v2/IsHoneypot";
     private static final String BSCSCAN_API  = "https://api.bscscan.com/api";
 
+    // Set via DexAppStore.bscScanApiKey — extends BscScan rate limit from 5/s to 10/s
+    public static String apiKey = "";
+
+    private static String bscScanUrl(String params) {
+        return BSCSCAN_API + "?" + params + (apiKey.isEmpty() ? "" : "&apikey=" + apiKey);
+    }
+
     // Dead addresses used to check LP burn
     private static final String DEAD_ADDR   = "0x000000000000000000000000000000000000dead";
     private static final String BURN_ADDR   = "0x0000000000000000000000000000000000000000";
@@ -111,7 +118,7 @@ public class BscChecker {
     }
 
     private static void checkBscScan(String addr, Result r) throws Exception {
-        String url = BSCSCAN_API + "?module=contract&action=getsourcecode&address=" + addr;
+        String url = bscScanUrl("module=contract&action=getsourcecode&address=" + addr);
         JSONObject resp = httpGetJson(url, 8_000);
         if (resp == null) return;
 
@@ -157,7 +164,7 @@ public class BscChecker {
 
     private static void checkHolderConcentration(String addr, Result r) throws Exception {
         // BscScan tokenholderlist: module=token, action=tokenholderlist
-        String url = BSCSCAN_API + "?module=token&action=tokenholderlist&contractaddress=" + addr + "&page=1&offset=10";
+        String url = bscScanUrl("module=token&action=tokenholderlist&contractaddress=" + addr + "&page=1&offset=10");
         JSONObject resp = httpGetJson(url, 8_000);
         if (resp == null) return;
 
@@ -181,8 +188,8 @@ public class BscChecker {
 
     private static void checkLpBurn(String pairAddress, Result r) throws Exception {
         // Check if LP tokens were sent to dead/burn address using BscScan tokentx
-        String url = BSCSCAN_API + "?module=account&action=tokentx&contractaddress="
-            + pairAddress + "&address=" + DEAD_ADDR + "&page=1&offset=5";
+        String url = bscScanUrl("module=account&action=tokentx&contractaddress="
+            + pairAddress + "&address=" + DEAD_ADDR + "&page=1&offset=5");
         JSONObject resp = httpGetJson(url, 8_000);
         if (resp == null) return;
 
@@ -194,8 +201,8 @@ public class BscChecker {
         }
 
         // Also check burn address
-        url = BSCSCAN_API + "?module=account&action=tokentx&contractaddress="
-            + pairAddress + "&address=" + BURN_ADDR + "&page=1&offset=5";
+        url = bscScanUrl("module=account&action=tokentx&contractaddress="
+            + pairAddress + "&address=" + BURN_ADDR + "&page=1&offset=5");
         resp = httpGetJson(url, 8_000);
         if (resp == null) return;
         txns = resp.optJSONArray("result");
