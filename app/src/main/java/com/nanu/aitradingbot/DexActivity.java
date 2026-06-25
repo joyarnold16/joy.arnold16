@@ -895,30 +895,38 @@ public class DexActivity extends Activity {
         tv2(riskCard, "RISK MANAGEMENT", 14, CYAN, Typeface.BOLD);
         riskCard.addView(gap(4));
 
-        // Show current adaptive risk mode based on trade size
-        double riskAmt = store.liveMode ? store.tradeAmountUsd : store.paperTradeAmountUsd;
-        String riskMode; String riskDesc; int riskColor;
-        if (riskAmt > 0 && riskAmt <= 25) {
-            riskMode = "SCALP  (≤$25)";
-            riskDesc = "SL capped 1.5% · TP capped 3% · hold capped 8 min.\nMany fast trades, small wins add up.";
-            riskColor = CYAN;
-        } else if (riskAmt <= 100) {
-            riskMode = "NORMAL  ($26–$100)";
-            riskDesc = "Your SL/TP/hold settings used as-is. Balanced approach.";
-            riskColor = GREEN;
-        } else if (riskAmt <= 300) {
-            riskMode = "SWING  ($101–$300)";
-            riskDesc = "SL min 2.5% · TP min 6% · hold min 20 min.\nLarger positions need room to breathe.";
-            riskColor = AMBER;
+        if (!store.autoMode) {
+            // Manual mode: user's SL/TP/hold are used exactly — no override
+            tv2(riskCard, "MANUAL MODE — your SL/TP/hold are used exactly as set", 13, GREEN, Typeface.BOLD);
+            tv2(riskCard, "SL " + store.stopLossPercent + "%  |  TP " + store.takeProfitPercent
+                + "%  |  Hold " + store.maxHoldMinutes + " min", 12, WHITE, Typeface.BOLD);
+            tv2(riskCard, "Switch to Auto Mode to enable adaptive risk profiles.", 11, GREY, Typeface.NORMAL);
         } else {
-            riskMode = "POSITION  ($300+)";
-            riskDesc = "SL min 4% · TP min 10% · hold min 45 min.\nBig capital = wide stops, patient exits.";
-            riskColor = RED;
+            // Auto mode: show which adaptive tier is active
+            double riskAmt = store.liveMode ? store.tradeAmountUsd : store.paperTradeAmountUsd;
+            String riskMode; String riskDesc; int riskColor;
+            if (riskAmt > 0 && riskAmt <= 25) {
+                riskMode = "SCALP  (≤$25)";
+                riskDesc = "SL capped 1.5% · TP capped 3% · hold capped 8 min. Fast in/out.";
+                riskColor = CYAN;
+            } else if (riskAmt <= 100) {
+                riskMode = "NORMAL  ($26–$100)";
+                riskDesc = "ML settings used as-is. Balanced approach.";
+                riskColor = GREEN;
+            } else if (riskAmt <= 300) {
+                riskMode = "SWING  ($101–$300)";
+                riskDesc = "SL min 2.5% · TP min 6% · hold min 20 min. Needs breathing room.";
+                riskColor = AMBER;
+            } else {
+                riskMode = "POSITION  ($300+)";
+                riskDesc = "SL min 4% · TP min 10% · hold min 45 min. Wide stops for large capital.";
+                riskColor = RED;
+            }
+            tv2(riskCard, "AUTO profile: " + riskMode, 13, riskColor, Typeface.BOLD);
+            tv2(riskCard, riskDesc, 11, GREY, Typeface.NORMAL);
+            riskCard.addView(gap(4));
+            tv2(riskCard, "Profile is automatic in Auto Mode — driven by trade amount.", 10, GREY, Typeface.NORMAL);
         }
-        tv2(riskCard, "Active profile: " + riskMode, 13, riskColor, Typeface.BOLD);
-        tv2(riskCard, riskDesc, 11, GREY, Typeface.NORMAL);
-        riskCard.addView(gap(8));
-        tv2(riskCard, "Profile is automatic — set by paper/live trade amount above.", 10, GREY, Typeface.NORMAL);
         riskCard.addView(gap(8));
         EditText dailyLossField = infoRow(riskCard, "Daily loss limit (USD, 0 = off)",
             String.valueOf((int) store.maxDailyLossUsd),

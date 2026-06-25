@@ -129,10 +129,13 @@ public class DexEngine {
     }
 
     /**
-     * Returns effective SL/TP/hold capped or floored to a risk tier based on
-     * the position's USD size. Small amounts scalp fast; large amounts need room.
+     * Returns effective SL/TP/hold for a position.
+     *
+     * Manual mode: returns user's exact settings unchanged — no override.
+     * Auto mode:   applies adaptive tier based on position size so ML-chosen
+     *              params stay proportional to capital at risk.
      *   ≤$25   → SCALP   : SL ≤1.5%,  TP ≤3%,   hold ≤8 min
-     *   ≤$100  → NORMAL  : user settings unchanged
+     *   ≤$100  → NORMAL  : settings unchanged
      *   ≤$300  → SWING   : SL ≥2.5%,  TP ≥6%,   hold ≥20 min
      *   >$300  → POSITION: SL ≥4.0%,  TP ≥10%,  hold ≥45 min
      */
@@ -142,6 +145,12 @@ public class DexEngine {
         double trail = store.trailingStopPct;
         int    hold  = store.maxHoldMinutes;
 
+        // Manual mode: user's settings are sacred — use them exactly as set
+        if (!store.autoMode) {
+            return new RiskParams(sl, tp, trail, hold, "MANUAL");
+        }
+
+        // Auto mode only: adapt to position size
         if (amtUsd > 0 && amtUsd <= 25) {
             return new RiskParams(Math.min(sl, 1.5), Math.min(tp, 3.0),
                 Math.min(trail, 0.8), Math.min(hold, 8), "SCALP");
