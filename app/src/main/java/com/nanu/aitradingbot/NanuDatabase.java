@@ -38,7 +38,18 @@ public class NanuDatabase extends SQLiteOpenHelper {
 
     private NanuDatabase(Context ctx) {
         super(ctx, DB_NAME, null, DB_VER);
-        getWritableDatabase().execSQL("PRAGMA journal_mode=WAL");
+        try {
+            getWritableDatabase().execSQL("PRAGMA journal_mode=WAL");
+        } catch (Exception e) {
+            Log.e(TAG, "DB open failed, deleting and recreating: " + e.getMessage());
+            try { close(); } catch (Exception ignored) {}
+            ctx.deleteDatabase(DB_NAME);
+            try {
+                getWritableDatabase().execSQL("PRAGMA journal_mode=WAL");
+            } catch (Exception e2) {
+                Log.e(TAG, "DB recreate also failed — DB ops will degrade gracefully: " + e2.getMessage());
+            }
+        }
     }
 
     // ─ DDL ──────────────────────────────────────────────────────────────────
@@ -134,10 +145,14 @@ public class NanuDatabase extends SQLiteOpenHelper {
     }
 
     @Override public void onUpgrade(SQLiteDatabase db, int oldV, int newV) {
-        if (oldV < 2)
-            db.execSQL("ALTER TABLE trades ADD COLUMN trailing_sl REAL DEFAULT 0");
-        if (oldV < 3)
-            db.execSQL("ALTER TABLE trades ADD COLUMN patterns TEXT DEFAULT ''");
+        if (oldV < 2) {
+            try { db.execSQL("ALTER TABLE trades ADD COLUMN trailing_sl REAL DEFAULT 0"); }
+            catch (Exception ignored) { Log.w(TAG, "trailing_sl column already exists"); }
+        }
+        if (oldV < 3) {
+            try { db.execSQL("ALTER TABLE trades ADD COLUMN patterns TEXT DEFAULT ''"); }
+            catch (Exception ignored) { Log.w(TAG, "patterns column already exists"); }
+        }
     }
 
     // ─ TRADES ────────────────────────────────────────────────────────────────

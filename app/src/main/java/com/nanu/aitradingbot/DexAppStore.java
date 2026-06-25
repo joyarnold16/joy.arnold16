@@ -93,9 +93,21 @@ public class DexAppStore {
     public DexAppStore(Context ctx) {
         prefs  = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         secure = new SecurePrefs(ctx);
-        db     = NanuDatabase.get(ctx);
+        db     = openDb(ctx);
         load();
         migrateIfNeeded();
+    }
+
+    private static NanuDatabase openDb(Context ctx) {
+        try {
+            return NanuDatabase.get(ctx);
+        } catch (Throwable e) {
+            android.util.Log.e("DexAppStore", "DB init failed, wiping DB file: " + e.getMessage());
+            try {
+                ctx.getApplicationContext().deleteDatabase("nanu_trading.db");
+            } catch (Throwable ignored) {}
+            return NanuDatabase.get(ctx);
+        }
     }
 
     public void save() {
