@@ -592,9 +592,15 @@ public class DexActivity extends Activity {
             16, WHITE, Typeface.BOLD);
         String modeLabel = store.liveMode ? "🟢 LIVE" : "📜 PAPER";
         double posSize = store.liveMode ? store.tradeAmountUsd : store.paperTradeAmountUsd;
-        tv2(header, modeLabel + " $" + String.format("%.0f", posSize) + "/trade"
-            + " | SL " + store.stopLossPercent + "% | TP " + store.takeProfitPercent
-            + "% | Max hold " + store.maxHoldMinutes + "min", 12, GREY, Typeface.NORMAL);
+        DexEngine.RiskParams hdrRp = DexEngine.effectiveRisk(posSize, store);
+        tv2(header, modeLabel + " $" + String.format("%.0f", posSize) + "/trade  " + hdrRp.mode
+            + " | SL " + hdrRp.sl + "% | TP " + hdrRp.tp + "%"
+            + " | Max hold " + hdrRp.holdMin + "min", 12, GREY, Typeface.NORMAL);
+        if (store.isDailyLossLimitHit())
+            tv2(header, "🔴 Daily loss limit hit — no new entries until midnight", 11, RED, Typeface.BOLD);
+        else if (store.dailyPnlUsd != 0)
+            tv2(header, "Today P/L: " + String.format("%+.2f", store.dailyPnlUsd) + " USD", 11,
+                store.dailyPnlUsd >= 0 ? GREEN : RED, Typeface.NORMAL);
 
         if (open.isEmpty()) {
             LinearLayout empty = card(p);
@@ -636,13 +642,15 @@ public class DexActivity extends Activity {
             double trailPrice = r.peakPrice * (1 - store.trailingStopPct / 100);
             tv2(card, "Peak: $" + fmt8(r.peakPrice) + " | Trail SL: $" + fmt8(trailPrice), 11, AMBER, Typeface.NORMAL);
         }
-        tv2(card, "TP: +" + store.takeProfitPercent + "% = $" + fmt8(r.entryPrice * (1 + store.takeProfitPercent/100))
-            + "  |  SL: -" + store.stopLossPercent + "% = $" + fmt8(r.entryPrice * (1 - store.stopLossPercent/100)),
+        DexEngine.RiskParams rp = DexEngine.effectiveRisk(r.amountUsd, store);
+        tv2(card, "TP: +" + rp.tp + "% = $" + fmt8(r.entryPrice * (1 + rp.tp/100))
+            + "  |  SL: -" + rp.sl + "% = $" + fmt8(r.entryPrice * (1 - rp.sl/100)),
             11, GREY, Typeface.NORMAL);
-        tv2(card, "Strategy: " + r.strategyName + " | Size: $" + String.format("%.2f", r.amountUsd),
+        tv2(card, "Strategy: " + r.strategyName + " | Size: $" + String.format("%.2f", r.amountUsd)
+            + " | " + rp.mode,
             11, GREY, Typeface.NORMAL);
         long held = (System.currentTimeMillis() - r.openTimeMs) / 60_000L;
-        tv2(card, "Open for " + held + " min | Max hold " + store.maxHoldMinutes + " min",
+        tv2(card, "Open for " + held + " min | Max hold " + rp.holdMin + " min",
             11, AMBER, Typeface.NORMAL);
         if (!r.patterns.isEmpty())
             tv2(card, "Patterns: " + CandlePatterns.summary(r.patterns), 10, GREY, Typeface.NORMAL);
@@ -881,6 +889,61 @@ public class DexActivity extends Activity {
             }
         });
         scanCard.addView(saveBtn);
+
+        // Risk Management
+        LinearLayout riskCard = card(p);
+        tv2(riskCard, "RISK MANAGEMENT", 14, CYAN, Typeface.BOLD);
+        riskCard.addView(gap(4));
+
+        // Show current adaptive risk mode based on trade size
+        double riskAmt = store.liveMode ? store.tradeAmountUsd : store.paperTradeAmountUsd;
+        String riskMode; String riskDesc; int riskColor;
+        if (riskAmt > 0 && riskAmt <= 25) {
+            riskMode = "SCALP  (≤$25)";
+            riskDesc = "SL capped 1.5% · TP capped 3% · hold capped 8 min.\nMany fast trades, small wins add up.";
+            riskColor = CYAN;
+        } else if (riskAmt <= 100) {
+            riskMode = "NORMAL  ($26–$100)";
+            riskDesc = "Your SL/TP/hold settings used as-is. Balanced approach.";
+            riskColor = GREEN;
+        } else if (riskAmt <= 300) {
+            riskMode = "SWING  ($101–$300)";
+            riskDesc = "SL min 2.5% · TP min 6% · hold min 20 min.\nLarger positions need room to breathe.";
+            riskColor = AMBER;
+        } else {
+            riskMode = "POSITION  ($300+)";
+            riskDesc = "SL min 4% · TP min 10% · hold min 45 min.\nBig capital = wide stops, patient exits.";
+            riskColor = RED;
+        }
+        tv2(riskCard, "Active profile: " + riskMode, 13, riskColor, Typeface.BOLD);
+        tv2(riskCard, riskDesc, 11, GREY, Typeface.NORMAL);
+        riskCard.addView(gap(8));
+        tv2(riskCard, "Profile is automatic — set by paper/live trade amount above.", 10, GREY, Typeface.NORMAL);
+        riskCard.addView(gap(8));
+        EditText dailyLossField = infoRow(riskCard, "Daily loss limit (USD, 0 = off)",
+            String.valueOf((int) store.maxDailyLossUsd),
+            "Stop opening new positions for the rest of the day once losses reach this amount. "
+            + "E.g. set 5 to halt after losing $5 today. Resets at midnight. 0 = no limit.");
+        String dailyStatus = store.maxDailyLossUsd > 0
+            ? String.format("Today: %+.2f USD  |  Limit: -%.0f USD  |  %s",
+                store.dailyPnlUsd, store.maxDailyLossUsd,
+                store.isDailyLossLimitHit() ? "🔴 HALTED" : "🟢 Trading")
+            : "Today: " + String.format("%+.2f", store.dailyPnlUsd) + " USD  |  No daily limit set";
+        tv2(riskCard, dailyStatus, 11, store.isDailyLossLimitHit() ? RED : GREY, Typeface.NORMAL);
+        riskCard.addView(gap(8));
+        Button riskSave = bigBtn("Save Risk Settings", CYAN);
+        riskSave.setOnClickListener(v -> {
+            try {
+                double dl = Double.parseDouble(dailyLossField.getText().toString());
+                store.maxDailyLossUsd = Math.max(0, dl);
+                store.save();
+                Toast.makeText(this, "Risk settings saved", Toast.LENGTH_SHORT).show();
+                buildControl();
+            } catch (Exception e) {
+                Toast.makeText(this, "Invalid input", Toast.LENGTH_SHORT).show();
+            }
+        });
+        riskCard.addView(riskSave);
 
         // Strategy / Scalping settings
         LinearLayout stratCard = card(p);

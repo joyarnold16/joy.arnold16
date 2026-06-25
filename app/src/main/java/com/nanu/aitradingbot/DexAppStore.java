@@ -55,6 +55,10 @@ public class DexAppStore {
     // Bot running state (persisted for boot-restart)
     public boolean botRunning = false;
 
+    // Risk management
+    public double maxDailyLossUsd = 0;   // 0 = disabled; halt new entries if daily loss exceeds this
+    public double dailyPnlUsd     = 0;   // running P/L for today; resets at midnight
+
     // Stats
     public int    totalTrades = 0;
     public int    totalWins   = 0;
@@ -100,6 +104,8 @@ public class DexAppStore {
             .putString("mlStrat",   mlStrategy)
             .putInt("mlGen",        mlGeneration)
             .putFloat("mlWR",       (float) mlWinRate)
+            .putFloat("maxDailyLoss", (float) maxDailyLossUsd)
+            .putFloat("dailyPnl",    (float) dailyPnlUsd)
             .putInt("totalTrades",  totalTrades)
             .putInt("totalWins",    totalWins)
             .putFloat("totalPnl",   (float) totalPnlUsd)
@@ -137,6 +143,8 @@ public class DexAppStore {
         mlStrategy         = prefs.getString("mlStrat",  "BALANCED");
         mlGeneration       = prefs.getInt("mlGen",      0);
         mlWinRate          = prefs.getFloat("mlWR",     0f);
+        maxDailyLossUsd    = prefs.getFloat("maxDailyLoss", 0f);
+        dailyPnlUsd        = prefs.getFloat("dailyPnl",     0f);
         totalTrades        = prefs.getInt("totalTrades",0);
         totalWins          = prefs.getInt("totalWins",  0);
         totalPnlUsd        = prefs.getFloat("totalPnl", 0f);
@@ -153,9 +161,14 @@ public class DexAppStore {
         long today = System.currentTimeMillis() / 86_400_000L;
         if (today != lastTradeDay) {
             tradesToday  = 0;
+            dailyPnlUsd  = 0;
             lastTradeDay = today;
             save();
         }
+    }
+
+    public boolean isDailyLossLimitHit() {
+        return maxDailyLossUsd > 0 && dailyPnlUsd <= -maxDailyLossUsd;
     }
 
     public String getMnemonic()             { return secure.loadMnemonic(); }
@@ -291,8 +304,9 @@ public class DexAppStore {
                 r.isWin       = r.pnlUsd > 0;
                 totalTrades++;
                 if (r.isWin) totalWins++;
-                totalPnlUsd  += r.pnlUsd;
-                mlWinRate     = totalTrades > 0 ? (double) totalWins / totalTrades * 100.0 : 0;
+                totalPnlUsd += r.pnlUsd;
+                dailyPnlUsd += r.pnlUsd;
+                mlWinRate    = totalTrades > 0 ? (double) totalWins / totalTrades * 100.0 : 0;
                 closed = r;
                 break;
             }

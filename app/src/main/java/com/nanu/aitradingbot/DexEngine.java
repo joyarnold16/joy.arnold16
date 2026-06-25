@@ -116,6 +116,46 @@ public class DexEngine {
         });
     }
 
+    // ─ ADAPTIVE RISK PARAMS ─────────────────────────────────────────
+
+    static class RiskParams {
+        final double sl, tp, trailPct;
+        final int    holdMin;
+        final String mode;
+        RiskParams(double sl, double tp, double trailPct, int holdMin, String mode) {
+            this.sl = sl; this.tp = tp; this.trailPct = trailPct;
+            this.holdMin = holdMin; this.mode = mode;
+        }
+    }
+
+    /**
+     * Returns effective SL/TP/hold capped or floored to a risk tier based on
+     * the position's USD size. Small amounts scalp fast; large amounts need room.
+     *   ≤$25   → SCALP   : SL ≤1.5%,  TP ≤3%,   hold ≤8 min
+     *   ≤$100  → NORMAL  : user settings unchanged
+     *   ≤$300  → SWING   : SL ≥2.5%,  TP ≥6%,   hold ≥20 min
+     *   >$300  → POSITION: SL ≥4.0%,  TP ≥10%,  hold ≥45 min
+     */
+    static RiskParams effectiveRisk(double amtUsd, DexAppStore store) {
+        double sl    = store.stopLossPercent;
+        double tp    = store.takeProfitPercent;
+        double trail = store.trailingStopPct;
+        int    hold  = store.maxHoldMinutes;
+
+        if (amtUsd > 0 && amtUsd <= 25) {
+            return new RiskParams(Math.min(sl, 1.5), Math.min(tp, 3.0),
+                Math.min(trail, 0.8), Math.min(hold, 8), "SCALP");
+        } else if (amtUsd <= 100) {
+            return new RiskParams(sl, tp, trail, hold, "NORMAL");
+        } else if (amtUsd <= 300) {
+            return new RiskParams(Math.max(sl, 2.5), Math.max(tp, 6.0),
+                Math.max(trail, 1.2), Math.max(hold, 20), "SWING");
+        } else {
+            return new RiskParams(Math.max(sl, 4.0), Math.max(tp, 10.0),
+                Math.max(trail, 2.0), Math.max(hold, 45), "POSITION");
+        }
+    }
+
     // ─ QUEUE DRAIN (auto-retry next if blocked) ─────────────────────
 
     private void drainQueue() {
@@ -124,6 +164,13 @@ public class DexEngine {
 
         // Reset the daily counter if the calendar day changed while idle
         store.rolloverDayIfNeeded();
+
+        // Hard stop: daily loss limit
+        if (store.isDailyLossLimitHit()) {
+            Log.w(TAG, "Daily loss limit $" + store.maxDailyLossUsd
+                + " hit (today: $" + String.format("%.2f", store.dailyPnlUsd) + "). No new entries.");
+            return;
+        }
 
         // Auto mode: re-evolve ML params before each drain cycle
         if (store.autoMode) BotEvolution.evolve(store);
@@ -223,14 +270,16 @@ public class DexEngine {
         List<TradeRecord> open = store.getOpenPositions();
         if (open.isEmpty()) return;
 
-        // Get current prices from DEX Screener for open positions
         for (TradeRecord r : open) {
             try {
                 double current = fetchCurrentPrice(r);
                 if (current <= 0) continue;
 
-                double pct = (current - r.entryPrice) / r.entryPrice * 100.0;
-                long heldMin = (System.currentTimeMillis() - r.openTimeMs) / 60_000L;
+                // Use risk params tuned to this position's size
+                RiskParams rp = effectiveRisk(r.amountUsd, store);
+
+                double pct     = (current - r.entryPrice) / r.entryPrice * 100.0;
+                long   heldMin = (System.currentTimeMillis() - r.openTimeMs) / 60_000L;
 
                 // Update trailing peak price
                 if (store.useTrailingStop && current > r.peakPrice) {
@@ -240,24 +289,28 @@ public class DexEngine {
                     store.saveHistory(hist);
                 }
 
-                // Trailing stop: exit if price drops trailingStopPct% below peak
-                double trailStop = store.useTrailingStop && r.peakPrice > r.entryPrice
+                // Trailing stop: exit if price drops trailPct% below peak
+                double trailDrop = store.useTrailingStop && r.peakPrice > r.entryPrice
                     ? (r.peakPrice - current) / r.peakPrice * 100.0
                     : -1;
 
                 String reason = null;
-                if (pct >= store.takeProfitPercent)
+                if (pct >= rp.tp)
                     reason = "take_profit";
-                else if (store.useTrailingStop && trailStop >= store.trailingStopPct
+                else if (store.useTrailingStop && trailDrop >= rp.trailPct
                          && r.peakPrice > r.entryPrice * 1.005)
                     reason = "trailing_stop";
-                else if (pct <= -store.stopLossPercent)
+                else if (pct <= -rp.sl)
                     reason = "stop_loss";
-                else if (heldMin >= store.maxHoldMinutes)
+                else if (heldMin >= rp.holdMin)
                     reason = "force_close";
 
-                if (reason != null)
+                if (reason != null) {
+                    Log.d(TAG, rp.mode + " exit → " + reason + " | " + r.tokenSymbol
+                        + " pct=" + String.format("%.2f", pct)
+                        + " sl=" + rp.sl + " tp=" + rp.tp + " hold=" + rp.holdMin + "min");
                     closePosition(r, current, reason);
+                }
             } catch (Exception e) {
                 Log.w(TAG, "Monitor error for " + r.tokenSymbol + ": " + e.getMessage());
             }
