@@ -75,6 +75,24 @@ public class DexEngine {
         Log.w(TAG, "PANIC: closed " + open.size() + " positions");
     }
 
+    public void manualClose(String tradeId) {
+        for (TradeRecord r : store.getOpenPositions()) {
+            if (r.id.equals(tradeId)) {
+                new Thread(() -> {
+                    double price = r.entryPrice;
+                    try {
+                        double p = fetchCurrentPrice(r);
+                        if (p > 0) price = p;
+                    } catch (Exception ignored) {}
+                    closePosition(r, price, "manual_exit");
+                    Log.i(TAG, "Manual exit: " + r.tokenSymbol + " @ " + price);
+                }, "nanu-manual-close").start();
+                return;
+            }
+        }
+        Log.w(TAG, "manualClose: trade " + tradeId + " not found or already closed");
+    }
+
     // ─ SCAN LOOP ─────────────────────────────────────────────────
 
     private void startScanLoop() {

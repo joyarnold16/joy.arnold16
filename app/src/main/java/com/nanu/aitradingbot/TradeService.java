@@ -58,6 +58,11 @@ public class TradeService extends Service {
             engine.panicClose();
             return START_STICKY;
         }
+        if ("CLOSE_POSITION".equals(action)) {
+            String tradeId = intent.getStringExtra("tradeId");
+            if (tradeId != null) engine.manualClose(tradeId);
+            return START_STICKY;
+        }
         if ("SCAN_NOW".equals(action)) {
             if (active) engine.triggerScanNow();
             return START_STICKY;
@@ -275,6 +280,13 @@ public class TradeService extends Service {
     public static void triggerScan(Context ctx) {
         Intent i = new Intent(ctx, TradeService.class);
         i.setAction("SCAN_NOW");
+        ctx.startService(i);
+    }
+
+    public static void closePosition(Context ctx, String tradeId) {
+        Intent i = new Intent(ctx, TradeService.class);
+        i.setAction("CLOSE_POSITION");
+        i.putExtra("tradeId", tradeId);
         ctx.startService(i);
     }
 }

@@ -654,6 +654,63 @@ public class DexActivity extends Activity {
             11, AMBER, Typeface.NORMAL);
         if (!r.patterns.isEmpty())
             tv2(card, "Patterns: " + CandlePatterns.summary(r.patterns), 10, GREY, Typeface.NORMAL);
+
+        card.addView(gap(8));
+        Button closeBtn = bigBtn("Close Now", RED);
+        closeBtn.setOnClickListener(v -> {
+            String modeNote = r.isLive ? "LIVE trade — real swap will be signed." : "Paper trade — no real money.";
+            new AlertDialog.Builder(this)
+                .setTitle("Close " + r.tokenSymbol + "?")
+                .setMessage("Exit this position immediately at current market price.\n\n"
+                    + modeNote + "\n\nThis overrides SL/TP — exit happens right now.")
+                .setPositiveButton("Yes, close now", (d, w) -> manualClosePosition(r))
+                .setNegativeButton("Cancel", null)
+                .show();
+        });
+        card.addView(closeBtn);
+    }
+
+    private void manualClosePosition(TradeRecord r) {
+        if (TradeService.active) {
+            // Bot is running — route through engine so live swaps and notifications work properly
+            TradeService.closePosition(this, r.id);
+            Toast.makeText(this, "Closing " + r.tokenSymbol + "…", Toast.LENGTH_SHORT).show();
+            // UI refreshes automatically when onPositionClosed fires via engineListener
+        } else {
+            // Bot not running — close directly from Activity's store
+            if (r.isLive) {
+                alert("Start Bot First",
+                    "Live positions need the bot running to sign the sell transaction.\n\n"
+                    + "Tap Start on the Home tab, then close this position.");
+                return;
+            }
+            // Paper mode: fetch price in background then close
+            Toast.makeText(this, "Closing " + r.tokenSymbol + "…", Toast.LENGTH_SHORT).show();
+            new Thread(() -> {
+                double exitPrice = r.entryPrice;
+                try {
+                    String url = "https://api.dexscreener.com/latest/dex/tokens/" + r.tokenAddress;
+                    java.net.HttpURLConnection conn =
+                        (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                    conn.setConnectTimeout(8000); conn.setReadTimeout(8000);
+                    if (conn.getResponseCode() == 200) {
+                        java.io.BufferedReader br = new java.io.BufferedReader(
+                            new java.io.InputStreamReader(conn.getInputStream()));
+                        StringBuilder sb = new StringBuilder(); String ln;
+                        while ((ln = br.readLine()) != null) sb.append(ln);
+                        br.close();
+                        org.json.JSONArray pairs =
+                            new org.json.JSONObject(sb.toString()).optJSONArray("pairs");
+                        if (pairs != null && pairs.length() > 0) {
+                            Object p = pairs.getJSONObject(0).opt("priceUsd");
+                            if (p != null) exitPrice = Double.parseDouble(p.toString());
+                        }
+                    }
+                } catch (Exception ignored) {}
+                store.closePosition(r.id, exitPrice, "manual_exit", null);
+                ui.post(() -> { buildPosition(); buildHome(); });
+            }, "nanu-manual-close").start();
+        }
     }
 
     // ─────────────────────────────────────────────────────
