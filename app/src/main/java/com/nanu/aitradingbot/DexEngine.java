@@ -119,6 +119,9 @@ public class DexEngine {
     // ─ QUEUE DRAIN (auto-retry next if blocked) ─────────────────────
 
     private void drainQueue() {
+        // Always reload settings so user changes from the Control tab take effect immediately
+        store.reload();
+
         // Reset the daily counter if the calendar day changed while idle
         store.rolloverDayIfNeeded();
 
@@ -175,7 +178,6 @@ public class DexEngine {
                     }
                     store.saveHistory(hist);
                     DexEngine.this.notify(r);
-                    BotEvolution.evolve(store);
                 }
                 @Override public void onFail(String reason) {
                     Log.w(TAG, "Live buy failed: " + reason);
@@ -199,7 +201,6 @@ public class DexEngine {
             }
             store.saveHistory(hist);
             notify(r);
-            BotEvolution.evolve(store);
         }
     }
 
@@ -330,7 +331,7 @@ public class DexEngine {
     private void notifyClose(TradeRecord r) {
         TelegramBot.notifyClose(store, r);
         TradeService.notifyClosed(ctx, r);
-        BotEvolution.evolve(store);
+        if (store.autoMode) BotEvolution.evolve(store);
         if (listener != null) listener.onPositionClosed(r);
         Log.i(TAG, "Closed: " + r.tokenSymbol + " P/L=" + r.pnlUsd);
     }

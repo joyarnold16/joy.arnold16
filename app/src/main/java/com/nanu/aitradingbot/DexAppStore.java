@@ -36,11 +36,12 @@ public class DexAppStore {
     public boolean autoMode     = false;
 
     // Live mode (off by default — paper first)
-    public boolean liveMode     = false;
-    public boolean liveChainBnb = false;
-    public boolean liveChainSol = false;
-    public double  tradeAmountUsd = 0;
-    public int     slippageBps    = 300; // 3.0% max slippage on live swaps
+    public boolean liveMode           = false;
+    public boolean liveChainBnb       = false;
+    public boolean liveChainSol       = false;
+    public double  tradeAmountUsd     = 0;    // live mode position size
+    public double  paperTradeAmountUsd = 10.0; // paper mode position size (virtual USD)
+    public int     slippageBps        = 300;  // 3.0% max slippage on live swaps
 
     // Telegram
     public String telegramToken  = "";
@@ -91,7 +92,8 @@ public class DexAppStore {
             .putBoolean("liveMode",    liveMode)
             .putBoolean("liveBnb",     liveChainBnb)
             .putBoolean("liveSol",     liveChainSol)
-            .putFloat("tradeAmt",     (float) tradeAmountUsd)
+            .putFloat("tradeAmt",      (float) tradeAmountUsd)
+            .putFloat("paperAmt",      (float) paperTradeAmountUsd)
             .putInt("slippageBps",    slippageBps)
             .putString("tgToken",   telegramToken)
             .putString("tgChat",    telegramChatId)
@@ -124,11 +126,12 @@ public class DexAppStore {
         minAlgoScore       = prefs.getInt("minAlgoScore",   55);
         useTrailingStop    = prefs.getBoolean("trailStop",   true);
         trailingStopPct    = prefs.getFloat("trailPct",      1.0f);
-        liveMode           = prefs.getBoolean("liveMode",   false);
-        liveChainBnb       = prefs.getBoolean("liveBnb",    false);
-        liveChainSol       = prefs.getBoolean("liveSol",    false);
-        tradeAmountUsd     = prefs.getFloat("tradeAmt",     0f);
-        slippageBps        = prefs.getInt("slippageBps",    300);
+        liveMode            = prefs.getBoolean("liveMode",   false);
+        liveChainBnb        = prefs.getBoolean("liveBnb",    false);
+        liveChainSol        = prefs.getBoolean("liveSol",    false);
+        tradeAmountUsd      = prefs.getFloat("tradeAmt",     0f);
+        paperTradeAmountUsd = prefs.getFloat("paperAmt",     10.0f);
+        slippageBps         = prefs.getInt("slippageBps",    300);
         telegramToken      = prefs.getString("tgToken",  "");
         telegramChatId     = prefs.getString("tgChat",   "");
         mlStrategy         = prefs.getString("mlStrat",  "BALANCED");
@@ -257,7 +260,7 @@ public class DexAppStore {
         r.strategyName    = mlStrategy;
         r.confidenceScore = c.score;
         r.patterns        = new ArrayList<>(c.patterns);
-        r.amountUsd       = liveMode ? tradeAmountUsd : 10.0;
+        r.amountUsd       = liveMode ? tradeAmountUsd : paperTradeAmountUsd;
         r.isLive          = liveMode;
         r.peakPrice       = c.priceUsd;
         List<TradeRecord> list = loadHistory();

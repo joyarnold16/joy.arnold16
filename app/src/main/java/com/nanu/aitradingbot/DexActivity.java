@@ -591,7 +591,9 @@ public class DexActivity extends Activity {
         tv2(header, "OPEN POSITIONS (" + open.size() + "/" + store.maxPositions + ")",
             16, WHITE, Typeface.BOLD);
         String modeLabel = store.liveMode ? "🟢 LIVE" : "📜 PAPER";
-        tv2(header, modeLabel + " | SL " + store.stopLossPercent + "% | TP " + store.takeProfitPercent
+        double posSize = store.liveMode ? store.tradeAmountUsd : store.paperTradeAmountUsd;
+        tv2(header, modeLabel + " $" + String.format("%.0f", posSize) + "/trade"
+            + " | SL " + store.stopLossPercent + "% | TP " + store.takeProfitPercent
             + "% | Max hold " + store.maxHoldMinutes + "min", 12, GREY, Typeface.NORMAL);
 
         if (open.isEmpty()) {
@@ -853,6 +855,10 @@ public class DexActivity extends Activity {
             String.valueOf(store.maxDailyTrades),
             "Maximum number of trades the bot opens in one day. Resets at midnight. "
             + "Set lower to limit exposure. 0 = unlimited.");
+        EditText paperAmt = infoRow(scanCard, "Paper trade amount (USD)",
+            String.valueOf(store.paperTradeAmountUsd),
+            "Virtual USD size per paper trade. This is not real money — it determines the "
+            + "simulated P/L shown in History. Default $10. Set to match what you plan to use in live mode.");
         scanCard.addView(gap(8));
         Button saveBtn = bigBtn("Save Scanner Settings", CYAN);
         saveBtn.setOnClickListener(v -> {
@@ -866,6 +872,8 @@ public class DexActivity extends Activity {
                 store.maxScanTokens     = Math.min(90, Math.max(5, tok));
                 int daily = Integer.parseInt(maxDaily.getText().toString());
                 store.maxDailyTrades    = daily <= 0 ? Integer.MAX_VALUE : daily;
+                double pa = Double.parseDouble(paperAmt.getText().toString());
+                store.paperTradeAmountUsd = Math.max(1.0, pa);
                 store.save();
                 Toast.makeText(this, "Scanner settings saved", Toast.LENGTH_SHORT).show();
             } catch (Exception e) {
