@@ -10,8 +10,8 @@ android {
         applicationId "com.nanu.aitradingbot"
         minSdk 24
         targetSdk 35
-        versionCode 37
-        versionName "11.1-nanu"
+        versionCode 123
+        versionName "11.1-nanu (build 123)"
         multiDexEnabled true
     }
 
