@@ -1,8 +1,11 @@
 package com.nanu.aitradingbot;
 
-import android.app.NotificationManager;
 import android.content.Context;
 import android.util.Log;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -13,13 +16,15 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * - Scans DEX Screener every store.scanIntervalMin minutes.
  * - Maintains a queue of QUALIFIED candidates; tries each in order.
  * - Supports up to store.maxPositions simultaneous open positions.
- * - Monitors open positions for TP/SL/force-close.
+ * - Monitors open positions for TP/SL/trailing/break-even/signal exits.
  * - Calls SwapEngine for live trades (disabled when store.liveMode==false).
  * - Sends Telegram + Android notifications on open/close.
+ *
+ * Tier 3 safety: on-chain RPC checks (Solana + BSC) before each entry.
  */
 public class DexEngine {
     private static final String TAG = "DexEngine";
-    private static final int MONITOR_INTERVAL_MS = 15_000; // price check every 15s
+    private static final int MONITOR_INTERVAL_MS = 15_000;
 
     public interface Listener {
         void onScanStart();
@@ -81,8 +86,8 @@ public class DexEngine {
                 new Thread(() -> {
                     double price = r.entryPrice;
                     try {
-                        double p = fetchCurrentPrice(r);
-                        if (p > 0) price = p;
+                        DexCandidate live = fetchCurrentData(r);
+                        if (live != null && live.priceUsd > 0) price = live.priceUsd;
                     } catch (Exception ignored) {}
                     closePosition(r, price, "manual_exit");
                     Log.i(TAG, "Manual exit: " + r.tokenSymbol + " @ " + price);
@@ -118,8 +123,6 @@ public class DexEngine {
         DexMarketClient.discover(store, new DexMarketClient.Callback() {
             @Override public void onResult(List<DexCandidate> candidates) {
                 lastScanResults = candidates;
-                // Rebuild queue from this scan only — stale candidates from
-                // previous cycles expire so we never enter on outdated data.
                 queue.clear();
                 for (DexCandidate c : candidates) {
                     if ("QUALIFIED".equals(c.status) && !alreadyOpen(c.tokenAddress))
@@ -149,13 +152,12 @@ public class DexEngine {
     /**
      * Returns effective SL/TP/hold for a position.
      *
-     * Manual mode: returns user's exact settings unchanged — no override.
-     * Auto mode:   applies adaptive tier based on position size so ML-chosen
-     *              params stay proportional to capital at risk.
-     *   ≤$25   → SCALP   : SL ≤1.5%,  TP ≤3%,   hold ≤8 min
-     *   ≤$100  → NORMAL  : settings unchanged
-     *   ≤$300  → SWING   : SL ≥2.5%,  TP ≥6%,   hold ≥20 min
-     *   >$300  → POSITION: SL ≥4.0%,  TP ≥10%,  hold ≥45 min
+     * Manual mode: returns user's exact settings — no override.
+     * Auto mode:   adaptive tier by trade size:
+     *   ≤$25   SCALP    SL ≤1.5% TP ≤3%   hold ≤8 min
+     *   ≤$100  NORMAL   user settings as-is
+     *   ≤$300  SWING    SL ≥2.5% TP ≥6%   hold ≥20 min
+     *   >$300  POSITION SL ≥4.0% TP ≥10%  hold ≥45 min
      */
     static RiskParams effectiveRisk(double amtUsd, DexAppStore store) {
         double sl    = store.stopLossPercent;
@@ -163,43 +165,40 @@ public class DexEngine {
         double trail = store.trailingStopPct;
         int    hold  = store.maxHoldMinutes;
 
-        // Manual mode: user's settings are sacred — use them exactly as set
-        if (!store.autoMode) {
+        if (!store.autoMode)
             return new RiskParams(sl, tp, trail, hold, "MANUAL");
-        }
 
-        // Auto mode only: adapt to position size
-        if (amtUsd > 0 && amtUsd <= 25) {
+        if (amtUsd > 0 && amtUsd <= 25)
             return new RiskParams(Math.min(sl, 1.5), Math.min(tp, 3.0),
                 Math.min(trail, 0.8), Math.min(hold, 8), "SCALP");
-        } else if (amtUsd <= 100) {
+        else if (amtUsd <= 100)
             return new RiskParams(sl, tp, trail, hold, "NORMAL");
-        } else if (amtUsd <= 300) {
+        else if (amtUsd <= 300)
             return new RiskParams(Math.max(sl, 2.5), Math.max(tp, 6.0),
                 Math.max(trail, 1.2), Math.max(hold, 20), "SWING");
-        } else {
+        else
             return new RiskParams(Math.max(sl, 4.0), Math.max(tp, 10.0),
                 Math.max(trail, 2.0), Math.max(hold, 45), "POSITION");
-        }
     }
 
-    // ─ QUEUE DRAIN (auto-retry next if blocked) ─────────────────────
+    // ─ QUEUE DRAIN ─────────────────────────────────────────────────
 
     private void drainQueue() {
-        // Always reload settings so user changes from the Control tab take effect immediately
         store.reload();
-
-        // Reset the daily counter if the calendar day changed while idle
         store.rolloverDayIfNeeded();
 
-        // Hard stop: daily loss limit
         if (store.isDailyLossLimitHit()) {
-            Log.w(TAG, "Daily loss limit $" + store.maxDailyLossUsd
-                + " hit (today: $" + String.format("%.2f", store.dailyPnlUsd) + "). No new entries.");
+            Log.w(TAG, "Daily loss limit $" + store.maxDailyLossUsd + " hit. No new entries.");
             return;
         }
 
-        // Auto mode: re-evolve ML params before each drain cycle
+        // Revenge-trade cooldown: 10 min after a loss before any new entry
+        if (store.isRevengeTradeCooldownActive()) {
+            long remMin = store.revengeCooldownRemainingMs() / 60_000;
+            Log.d(TAG, "Revenge-trade cooldown: " + remMin + " min remaining.");
+            return;
+        }
+
         if (store.autoMode) BotEvolution.evolve(store);
 
         Iterator<DexCandidate> it = queue.iterator();
@@ -209,24 +208,77 @@ public class DexEngine {
             DexCandidate c = it.next();
             queue.remove(c);
 
-            // Re-check safety (may have changed since scan)
+            // Re-check safety with fresh settings
             String block = DexSafetyPolicy.check(c, store);
             if (block != null) {
-                Log.d(TAG, "Queue skip (re-check blocked): " + c.symbol + " | " + block);
+                Log.d(TAG, "Queue skip (re-check): " + c.symbol + " | " + block);
                 continue;
             }
             if (alreadyOpen(c.tokenAddress)) continue;
 
+            // Order size vs. liquidity guard: don't take >0.5% of pool
+            double orderSize = store.liveMode ? store.tradeAmountUsd : store.paperTradeAmountUsd;
+            if (c.liquidityUsd > 0 && orderSize > 0 && orderSize / c.liquidityUsd > 0.005) {
+                Log.d(TAG, "Queue skip (order " + orderSize + " > 0.5% of liq " + c.liquidityUsd + "): " + c.symbol);
+                continue;
+            }
+
             // Algo entry filter
             AlgoEngine.Signal sig = AlgoEngine.entrySignal(c);
             if (!sig.isGoodEntry(store.minAlgoScore)) {
-                Log.d(TAG, "Queue skip (algo score " + sig.score + "<" + store.minAlgoScore + "): " + c.symbol);
+                Log.d(TAG, "Queue skip (algo " + sig.score + "<" + store.minAlgoScore + "): " + c.symbol);
                 continue;
             }
-            c.algoSignal     = sig.type;
-            c.algoScore      = sig.score;
+            c.algoSignal = sig.type;
+            c.algoScore  = sig.score;
+
+            // Tier 3: on-chain safety check (synchronous, runs on this bg thread)
+            if (!onChainSafe(c)) {
+                Log.w(TAG, "Queue skip (on-chain unsafe): " + c.symbol);
+                continue;
+            }
+
             openPosition(c, sig);
         }
+    }
+
+    /**
+     * Tier 3: on-chain safety checks before live/paper entry.
+     * Returns false only for hard failures (honeypot detected, extreme sell tax).
+     * Soft warnings update the candidate's fields but don't block entry.
+     */
+    private boolean onChainSafe(DexCandidate c) {
+        try {
+            if ("solana".equals(c.chain)) {
+                SolanaChecker.Result r = SolanaChecker.check(c.tokenAddress);
+                c.mintAuthorityRevoked   = r.mintAuthorityRevoked;
+                c.freezeAuthorityRevoked = r.freezeAuthorityRevoked;
+                c.onChainNote = r.note;
+                // Compute rough scam risk: unrevoked authorities are red flags but not a hard block
+                c.scamRiskScore = 100 - r.safetyScore;
+                Log.d(TAG, "SOL on-chain " + c.symbol + ": " + r.note);
+            } else if ("bsc".equals(c.chain)) {
+                BscChecker.Result r = BscChecker.check(c.tokenAddress);
+                c.contractVerified = r.contractVerified;
+                c.ownerRenounced   = r.ownerRenounced;
+                c.onChainNote      = r.note;
+                c.scamRiskScore    = 100 - r.safetyScore;
+                Log.d(TAG, "BSC on-chain " + c.symbol + ": " + r.note);
+                // Hard blocks for BSC
+                if (r.isHoneypot) {
+                    Log.w(TAG, "BSC HONEYPOT: " + c.symbol);
+                    return false;
+                }
+                if (r.sellTaxPct > 10) {
+                    Log.w(TAG, "BSC sell tax " + r.sellTaxPct + "% too high: " + c.symbol);
+                    return false;
+                }
+            }
+        } catch (Exception e) {
+            // On-chain check failure is non-blocking (RPC may be down)
+            Log.w(TAG, "on-chain check error for " + c.symbol + ": " + e.getMessage());
+        }
+        return true;
     }
 
     // ─ OPEN POSITION ─────────────────────────────────────────────
@@ -240,18 +292,8 @@ public class DexEngine {
                     r.entryAlgoScore = sig.score;
                     r.algoSignal     = sig.type;
                     r.peakPrice      = price;
-                    List<TradeRecord> hist = store.loadHistory();
-                    for (TradeRecord h : hist) {
-                        if (r.id.equals(h.id)) {
-                            h.buyTxHash      = txHash;
-                            h.entryAlgoScore = sig.score;
-                            h.algoSignal     = sig.type;
-                            h.peakPrice      = price;
-                            break;
-                        }
-                    }
-                    store.saveHistory(hist);
-                    DexEngine.this.notify(r);
+                    updateHistoryRecord(r);
+                    notify(r);
                 }
                 @Override public void onFail(String reason) {
                     Log.w(TAG, "Live buy failed: " + reason);
@@ -263,19 +305,23 @@ public class DexEngine {
             r.entryAlgoScore = sig.score;
             r.algoSignal     = sig.type;
             r.peakPrice      = c.priceUsd;
-            // Persist algo fields
-            List<TradeRecord> hist = store.loadHistory();
-            for (TradeRecord h : hist) {
-                if (r.id.equals(h.id)) {
-                    h.entryAlgoScore = sig.score;
-                    h.algoSignal     = sig.type;
-                    h.peakPrice      = c.priceUsd;
-                    break;
-                }
-            }
-            store.saveHistory(hist);
+            updateHistoryRecord(r);
             notify(r);
         }
+    }
+
+    private void updateHistoryRecord(TradeRecord updated) {
+        List<TradeRecord> hist = store.loadHistory();
+        for (TradeRecord h : hist) {
+            if (updated.id.equals(h.id)) {
+                h.buyTxHash      = updated.buyTxHash;
+                h.entryAlgoScore = updated.entryAlgoScore;
+                h.algoSignal     = updated.algoSignal;
+                h.peakPrice      = updated.peakPrice;
+                break;
+            }
+        }
+        store.saveHistory(hist);
     }
 
     // ─ MONITOR LOOP ─────────────────────────────────────────────
@@ -299,16 +345,15 @@ public class DexEngine {
 
         for (TradeRecord r : open) {
             try {
-                double current = fetchCurrentPrice(r);
-                if (current <= 0) continue;
+                DexCandidate live = fetchCurrentData(r);
+                if (live == null || live.priceUsd <= 0) continue;
+                double current = live.priceUsd;
 
-                // Use risk params tuned to this position's size
-                RiskParams rp = effectiveRisk(r.amountUsd, store);
-
+                RiskParams rp  = effectiveRisk(r.amountUsd, store);
                 double pct     = (current - r.entryPrice) / r.entryPrice * 100.0;
                 long   heldMin = (System.currentTimeMillis() - r.openTimeMs) / 60_000L;
 
-                // Update trailing peak price
+                // Update trailing peak
                 if (store.useTrailingStop && current > r.peakPrice) {
                     r.peakPrice = current;
                     List<TradeRecord> hist = store.loadHistory();
@@ -316,21 +361,42 @@ public class DexEngine {
                     store.saveHistory(hist);
                 }
 
-                // Trailing stop: exit if price drops trailPct% below peak
+                // Trailing stop
                 double trailDrop = store.useTrailingStop && r.peakPrice > r.entryPrice
-                    ? (r.peakPrice - current) / r.peakPrice * 100.0
-                    : -1;
+                    ? (r.peakPrice - current) / r.peakPrice * 100.0 : -1;
 
                 String reason = null;
+
+                // Take profit
                 if (pct >= rp.tp)
                     reason = "take_profit";
+
+                // Trailing stop (only triggers after reaching peak above entry)
                 else if (store.useTrailingStop && trailDrop >= rp.trailPct
                          && r.peakPrice > r.entryPrice * 1.005)
                     reason = "trailing_stop";
+
+                // Break-even stop: once price was +breakEven% above entry, never close below entry
+                else if (store.breakEvenTriggerPct > 0
+                         && r.peakPrice >= r.entryPrice * (1 + store.breakEvenTriggerPct / 100.0)
+                         && pct <= 0)
+                    reason = "break_even_stop";
+
+                // Stop loss
                 else if (pct <= -rp.sl)
                     reason = "stop_loss";
+
+                // Force close on max hold time
                 else if (heldMin >= rp.holdMin)
                     reason = "force_close";
+
+                // Algo signal exit: bearish / sell-pressure / RSI overbought
+                else {
+                    live.patterns = CandlePatterns.detect(live);
+                    int exitSc = AlgoEngine.exitScore(live, pct);
+                    if (exitSc < 25)
+                        reason = "signal_exit";
+                }
 
                 if (reason != null) {
                     Log.d(TAG, rp.mode + " exit → " + reason + " | " + r.tokenSymbol
@@ -368,29 +434,37 @@ public class DexEngine {
             TradeRecord closed = store.closePosition(r.id, exitPrice, reason, null);
             if (closed != null) notifyClose(closed);
         }
-        // After closing, drain queue for next opportunity
         new Thread(this::drainQueue, "nanu-drain").start();
     }
 
-    // ─ PRICE FETCH ───────────────────────────────────────────────
+    // ─ PRICE / DATA FETCH ────────────────────────────────────────
 
-    private double fetchCurrentPrice(TradeRecord r) throws Exception {
+    /**
+     * Fetches full current pair data from DEX Screener.
+     * Returns a DexCandidate with live price, buy/sell counts, price changes.
+     * Used by both monitor loop (for exitScore) and manualClose.
+     */
+    private DexCandidate fetchCurrentData(TradeRecord r) throws Exception {
         String url = "https://api.dexscreener.com/latest/dex/tokens/" + r.tokenAddress;
-        java.net.HttpURLConnection conn =
-            (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
-        conn.setConnectTimeout(8000);
-        conn.setReadTimeout(8000);
-        if (conn.getResponseCode() != 200) return -1;
-        java.io.BufferedReader br = new java.io.BufferedReader(
-            new java.io.InputStreamReader(conn.getInputStream()));
+        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+        conn.setConnectTimeout(8_000);
+        conn.setReadTimeout(8_000);
+        if (conn.getResponseCode() != 200) return null;
+        BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
         StringBuilder sb = new StringBuilder(); String ln;
         while ((ln = br.readLine()) != null) sb.append(ln);
+        br.close();
         org.json.JSONObject resp = new org.json.JSONObject(sb.toString());
         org.json.JSONArray pairs = resp.optJSONArray("pairs");
-        if (pairs == null || pairs.length() == 0) return -1;
-        Object priceObj = pairs.getJSONObject(0).opt("priceUsd");
-        if (priceObj == null) return -1;
-        return Double.parseDouble(priceObj.toString());
+        if (pairs == null || pairs.length() == 0) return null;
+        // Prefer pair on the same chain
+        for (int i = 0; i < pairs.length(); i++) {
+            org.json.JSONObject pair = pairs.getJSONObject(i);
+            if (r.chain.equals(pair.optString("chainId", ""))) {
+                return DexMarketClient.parsePair(pair);
+            }
+        }
+        return DexMarketClient.parsePair(pairs.getJSONObject(0));
     }
 
     // ─ HELPERS ──────────────────────────────────────────────────
@@ -413,6 +487,6 @@ public class DexEngine {
         TradeService.notifyClosed(ctx, r);
         if (store.autoMode) BotEvolution.evolve(store);
         if (listener != null) listener.onPositionClosed(r);
-        Log.i(TAG, "Closed: " + r.tokenSymbol + " P/L=" + r.pnlUsd);
+        Log.i(TAG, "Closed: " + r.tokenSymbol + " P/L=" + String.format("%.4f", r.pnlUsd));
     }
 }

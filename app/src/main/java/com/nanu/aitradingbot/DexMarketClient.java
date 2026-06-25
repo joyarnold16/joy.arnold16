@@ -56,7 +56,7 @@ public class DexMarketClient {
                         JSONArray pairs = resp.optJSONArray("pairs");
                         if (pairs == null) continue;
                         for (int j = 0; j < pairs.length(); j++) {
-                            DexCandidate c = parse(pairs.getJSONObject(j));
+                            DexCandidate c = parsePair(pairs.getJSONObject(j));
                             if (c != null && chain.equals(c.chain)) all.add(c);
                         }
                     } catch (Exception e) { Log.w(TAG, "Batch error: " + e.getMessage()); }
@@ -95,10 +95,10 @@ public class DexMarketClient {
                 c.blockReason = block + (warn.isEmpty() ? "" : "; " + warn);
             } else if (c.score >= 60) {
                 c.status = "QUALIFIED";
-                c.blockReason = warn.isEmpty() ? "Passed hard filters" : "Passed hard filters; caution: " + warn;
+                c.blockReason = warn.isEmpty() ? "Passed all filters" : "Passed filters; caution: " + warn;
             } else {
                 c.status = "WATCHING";
-                c.blockReason = warn.isEmpty() ? "Score below threshold (need 60+)" : warn;
+                c.blockReason = warn.isEmpty() ? "Score " + c.score + " below 60" : warn;
             }
         }
         all.sort((a, b) -> Integer.compare(b.score, a.score));
@@ -133,7 +133,7 @@ public class DexMarketClient {
                         JSONArray pairs = resp.optJSONArray("pairs");
                         if (pairs == null) continue;
                         for (int j = 0; j < pairs.length(); j++) {
-                            DexCandidate c = parse(pairs.getJSONObject(j));
+                            DexCandidate c = parsePair(pairs.getJSONObject(j));
                             if (c != null) all.add(c);
                         }
                     } catch (Exception e) {
@@ -168,7 +168,8 @@ public class DexMarketClient {
         }
     }
 
-    private static DexCandidate parse(JSONObject pair) {
+    // Package-private so DexEngine.fetchCurrentData() can reuse it
+    static DexCandidate parsePair(JSONObject pair) {
         try {
             String pairChain = pair.optString("chainId", "");
             if (!"bsc".equals(pairChain) && !"solana".equals(pairChain)) return null;
@@ -182,32 +183,57 @@ public class DexMarketClient {
             c.symbol       = baseToken.optString("symbol", "???");
             c.tokenAddress = baseToken.optString("address", "");
             c.pairAddress  = pair.optString("pairAddress", "");
+            c.dexName      = pair.optString("dexId", "");
             c.priceUsd     = safeDouble(pair.opt("priceUsd"));
+            c.fdv          = pair.optDouble("fdv", 0);
+            c.marketCap    = pair.optDouble("marketCap", 0);
 
+            JSONObject quoteToken = pair.optJSONObject("quoteToken");
+            if (quoteToken != null) c.quoteToken = quoteToken.optString("symbol", "");
+
+            // Price changes: 5m, 1h, 6h, 24h
             JSONObject priceChange = pair.optJSONObject("priceChange");
             if (priceChange != null) {
+                c.priceChange5m  = priceChange.optDouble("m5",  0);
                 c.priceChange1h  = priceChange.optDouble("h1",  0);
+                c.priceChange6h  = priceChange.optDouble("h6",  0);
                 c.priceChange24h = priceChange.optDouble("h24", 0);
             }
 
+            // Volume: 5m, 1h, 6h, 24h
             JSONObject volume = pair.optJSONObject("volume");
-            if (volume != null)
+            if (volume != null) {
+                c.volume5m     = volume.optDouble("m5",  0);
+                c.volume1h     = volume.optDouble("h1",  0);
+                c.volume6h     = volume.optDouble("h6",  0);
                 c.volumeUsd24h = volume.optDouble("h24", 0);
+            }
 
+            // Liquidity
             JSONObject liquidity = pair.optJSONObject("liquidity");
             if (liquidity != null)
                 c.liquidityUsd = liquidity.optDouble("usd", 0);
 
+            // Transactions: 5m, 1h, 6h, 24h
             JSONObject txns = pair.optJSONObject("txns");
             if (txns != null) {
+                JSONObject m5 = txns.optJSONObject("m5");
+                if (m5 != null) { c.buys5m = m5.optInt("buys", 0); c.sells5m = m5.optInt("sells", 0); }
+                JSONObject h1 = txns.optJSONObject("h1");
+                if (h1 != null) { c.buys1h = h1.optInt("buys", 0); c.sells1h = h1.optInt("sells", 0); }
+                JSONObject h6 = txns.optJSONObject("h6");
+                if (h6 != null) { c.buys6h = h6.optInt("buys", 0); c.sells6h = h6.optInt("sells", 0); }
                 JSONObject h24 = txns.optJSONObject("h24");
-                if (h24 != null) {
-                    c.buys24h  = h24.optInt("buys",  0);
-                    c.sells24h = h24.optInt("sells", 0);
-                }
+                if (h24 != null) { c.buys24h = h24.optInt("buys", 0); c.sells24h = h24.optInt("sells", 0); }
             }
 
             c.pairCreatedAtMs = pair.optLong("pairCreatedAt", 0);
+            if (c.pairCreatedAtMs > 0)
+                c.pairAgeHours = (System.currentTimeMillis() - c.pairCreatedAtMs) / 3_600_000.0;
+
+            if (c.fdv > 0 && c.liquidityUsd > 0)
+                c.fdvLiquidityRatio = c.fdv / c.liquidityUsd;
+
             if (c.tokenAddress.isEmpty()) return null;
             return c;
         } catch (Exception e) {

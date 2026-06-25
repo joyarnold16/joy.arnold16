@@ -453,16 +453,33 @@ public class DexActivity extends Activity {
         top.addView(statusBadge(c));
         card.addView(top);
         card.addView(gap(2));
-        // Liquidity + volume
-        tv2(card, "$" + fmtK(c.liquidityUsd) + " liquidity  |  Vol $" + fmtK(c.volumeUsd24h),
+        // Liquidity + volume + FDV
+        String fdvStr = c.fdv > 0
+            ? " | FDV $" + fmtK(c.fdv)
+                + (c.fdvLiquidityRatio > 0 ? " (" + (int)c.fdvLiquidityRatio + "x)" : "")
+            : "";
+        String dexStr = !c.dexName.isEmpty() ? " • " + c.dexName : "";
+        tv2(card, "$" + fmtK(c.liquidityUsd) + " liq  Vol $" + fmtK(c.volumeUsd24h) + fdvStr + dexStr,
             11, GREY, Typeface.NORMAL);
-        // Price change
+        // Price changes: 5m, 1h, 24h
         LinearLayout changes = row(0, 2);
-        int h1Color = c.priceChange1h >= 0 ? GREEN : RED;
+        int m5Color  = c.priceChange5m  >= 0 ? GREEN : RED;
+        int h1Color  = c.priceChange1h  >= 0 ? GREEN : RED;
         int h24Color = c.priceChange24h >= 0 ? GREEN : RED;
+        if (c.priceChange5m != 0) {
+            changes.addView(tv(String.format("5m %+.1f%%", c.priceChange5m), 11, m5Color));
+            changes.addView(tv("  ", 11, GREY));
+        }
         changes.addView(tv(String.format("1h %+.2f%%", c.priceChange1h), 12, h1Color));
         changes.addView(tv("  |  ", 12, GREY));
         changes.addView(tv(String.format("24h %+.2f%%", c.priceChange24h), 12, h24Color));
+        if (c.pairAgeHours > 0) {
+            changes.addView(tv("  |  ", 11, GREY));
+            String ageStr = c.pairAgeHours > 48
+                ? String.format("%.0fd", c.pairAgeHours / 24)
+                : String.format("%.0fh", c.pairAgeHours);
+            changes.addView(tv(ageStr, 11, GREY));
+        }
         card.addView(changes);
         // Patterns
         if (!c.patterns.isEmpty()) {
@@ -477,6 +494,9 @@ public class DexActivity extends Activity {
             }
             card.addView(patRow);
         }
+        // On-chain safety note
+        if (c.onChainNote != null && !c.onChainNote.isEmpty())
+            tv2(card, "On-chain: " + c.onChainNote, 10, CYAN, Typeface.NORMAL);
         // Reason / warning
         if (c.blockReason != null && !c.blockReason.isEmpty()) {
             int rColor = "BLOCKED".equals(c.status) ? RED : ("QUALIFIED".equals(c.status) ? GREEN : GREY);
@@ -506,6 +526,23 @@ public class DexActivity extends Activity {
             String.format("%+.2f", store.totalPnlUsd),
             store.totalPnlUsd >= 0 ? GREEN : RED));
         summary.addView(stats);
+        // Extended stats row
+        if (!closed.isEmpty()) {
+            DexAppStore.Stats s = store.computeStats();
+            summary.addView(gap(6));
+            LinearLayout stats2 = row(0, 0);
+            stats2.addView(statBox("AVG WIN", String.format("+%.2f", s.avgWinUsd), GREEN));
+            stats2.addView(statBox("AVG LOSS", String.format("-%.2f", s.avgLossUsd), RED));
+            stats2.addView(statBox("P FACTOR", String.format("%.2f", s.profitFactor),
+                s.profitFactor >= 1 ? GREEN : RED));
+            summary.addView(stats2);
+            LinearLayout stats3 = row(0, 0);
+            stats3.addView(statBox("MAX DD", String.format("%.2f", s.maxDrawdownUsd), RED));
+            stats3.addView(statBox("STREAK", s.maxLossStreak + "L max", s.maxLossStreak > 3 ? RED : AMBER));
+            stats3.addView(statBox("EXPECT", String.format("%+.2f", s.expectancyUsd),
+                s.expectancyUsd >= 0 ? GREEN : RED));
+            summary.addView(stats3);
+        }
         summary.addView(gap(8));
         tv2(summary, BotEvolution.summary(store), 12, PURPLE, Typeface.NORMAL);
         summary.addView(gap(8));
@@ -547,6 +584,14 @@ public class DexActivity extends Activity {
         tv2(card, "Entry $" + fmt8(r.entryPrice) + "  →  Exit $" + fmt8(r.exitPrice), 12, GREY, Typeface.NORMAL);
         tv2(card, String.format("P/L  %+.4f USD  (%+.2f%%)", r.pnlUsd, r.pnlPercent),
             13, r.pnlUsd >= 0 ? GREEN : RED, Typeface.BOLD);
+        // Holding time and snapshot stats
+        long heldMs = r.holdingTimeMs();
+        String holdStr = heldMs > 0
+            ? String.format("Held %dm %ds", heldMs / 60_000, (heldMs % 60_000) / 1_000) : "";
+        String snapStr = r.liquidityAtEntry > 0
+            ? " | Liq $" + fmtK(r.liquidityAtEntry) : "";
+        if (!holdStr.isEmpty())
+            tv2(card, holdStr + snapStr, 10, GREY, Typeface.NORMAL);
 
         // Algo confidence row
         LinearLayout algoRow = row(0, 4);
@@ -995,6 +1040,11 @@ public class DexActivity extends Activity {
                 store.isDailyLossLimitHit() ? "🔴 HALTED" : "🟢 Trading")
             : "Today: " + String.format("%+.2f", store.dailyPnlUsd) + " USD  |  No daily limit set";
         tv2(riskCard, dailyStatus, 11, store.isDailyLossLimitHit() ? RED : GREY, Typeface.NORMAL);
+        if (store.isRevengeTradeCooldownActive()) {
+            long remSec = store.revengeCooldownRemainingMs() / 1_000;
+            tv2(riskCard, "⏳ Revenge-trade cooldown active — " + remSec + "s remaining (10 min after loss)",
+                11, AMBER, Typeface.BOLD);
+        }
         riskCard.addView(gap(8));
         Button riskSave = bigBtn("Save Risk Settings", CYAN);
         riskSave.setOnClickListener(v -> {
@@ -1030,13 +1080,18 @@ public class DexActivity extends Activity {
             EditText maxH = infoRow(stratCard, "Max hold (minutes)",
                 String.valueOf(store.maxHoldMinutes),
                 "Close position after this many minutes even if TP/SL not hit. Prevents dead positions.");
+            EditText beField = infoRow(stratCard, "Break-even trigger (%)",
+                String.valueOf(store.breakEvenTriggerPct),
+                "Once the position is +X% in profit, stop loss automatically moves to entry price. "
+                + "0 = disabled. Default 1.5%.");
             stratCard.addView(gap(8));
             Button stratSave = bigBtn("Save Strategy Settings", CYAN);
             stratSave.setOnClickListener(v -> {
                 try {
-                    store.stopLossPercent   = Double.parseDouble(sl.getText().toString());
-                    store.takeProfitPercent = Double.parseDouble(tp.getText().toString());
-                    store.maxHoldMinutes    = Integer.parseInt(maxH.getText().toString());
+                    store.stopLossPercent      = Double.parseDouble(sl.getText().toString());
+                    store.takeProfitPercent    = Double.parseDouble(tp.getText().toString());
+                    store.maxHoldMinutes       = Integer.parseInt(maxH.getText().toString());
+                    store.breakEvenTriggerPct  = Math.max(0, Double.parseDouble(beField.getText().toString()));
                     store.save();
                     Toast.makeText(this, "Strategy settings saved", Toast.LENGTH_SHORT).show();
                 } catch (Exception e) {

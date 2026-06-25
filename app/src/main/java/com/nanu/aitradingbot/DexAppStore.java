@@ -18,8 +18,8 @@ public class DexAppStore {
     // ML strategy params (evolved by BotEvolution)
     public double stopLossPercent     = 1.5;
     public double takeProfitPercent   = 3.0;
-    public double minMomentumPercent  = 0.3;   // require any positive 1h move; ML evolves this
-    public double minLiquidityUsd     = 15_000; // hard floor; ML raises this with experience
+    public double minMomentumPercent  = 0.3;
+    public double minLiquidityUsd     = 15_000;
     public int    minPairAgeHours     = 0;
     public int    maxPositions        = 3;
     public int    maxDailyTrades      = 10;
@@ -28,20 +28,22 @@ public class DexAppStore {
     public int    maxHoldMinutes      = 15;
 
     // Algo trading settings
-    public int     minAlgoScore      = 45;  // permissive start; ML tightens once trades close
+    public int     minAlgoScore      = 45;
     public boolean useTrailingStop   = true;
     public double  trailingStopPct   = 1.0;
+    // Break-even stop: once price is +breakEvenTriggerPct% in profit, stop loss moves to entry
+    public double  breakEvenTriggerPct = 1.5;
 
-    // Auto Mode: ML controls all params; manual overrides locked
+    // Auto Mode: ML controls all params
     public boolean autoMode     = false;
 
     // Live mode (off by default — paper first)
     public boolean liveMode           = false;
     public boolean liveChainBnb       = false;
     public boolean liveChainSol       = false;
-    public double  tradeAmountUsd     = 0;    // live mode position size
-    public double  paperTradeAmountUsd = 10.0; // paper mode position size (virtual USD)
-    public int     slippageBps        = 300;  // 3.0% max slippage on live swaps
+    public double  tradeAmountUsd     = 0;
+    public double  paperTradeAmountUsd = 10.0;
+    public int     slippageBps        = 300;
 
     // Telegram
     public String telegramToken  = "";
@@ -52,12 +54,16 @@ public class DexAppStore {
     public int    mlGeneration = 0;
     public double mlWinRate    = 0;
 
-    // Bot running state (persisted for boot-restart)
+    // Bot running state
     public boolean botRunning = false;
 
     // Risk management
-    public double maxDailyLossUsd = 0;   // 0 = disabled; halt new entries if daily loss exceeds this
-    public double dailyPnlUsd     = 0;   // running P/L for today; resets at midnight
+    public double maxDailyLossUsd = 0;
+    public double dailyPnlUsd     = 0;
+    // Revenge-trade cooldown: track time of last loss
+    public long   lastLossTimeMs  = 0;
+    // Fixed 10-minute cooldown after a loss (not user-configurable)
+    public static final long REVENGE_COOLDOWN_MS = 10 * 60 * 1000L;
 
     // Stats
     public int    totalTrades = 0;
@@ -92,7 +98,8 @@ public class DexAppStore {
             .putInt("maxHold",      maxHoldMinutes)
             .putInt("minAlgoScore",    minAlgoScore)
             .putBoolean("trailStop",   useTrailingStop)
-            .putFloat("trailPct",     (float) trailingStopPct)
+            .putFloat("trailPct",      (float) trailingStopPct)
+            .putFloat("breakEvenPct",  (float) breakEvenTriggerPct)
             .putBoolean("liveMode",    liveMode)
             .putBoolean("liveBnb",     liveChainBnb)
             .putBoolean("liveSol",     liveChainSol)
@@ -106,6 +113,7 @@ public class DexAppStore {
             .putFloat("mlWR",       (float) mlWinRate)
             .putFloat("maxDailyLoss", (float) maxDailyLossUsd)
             .putFloat("dailyPnl",    (float) dailyPnlUsd)
+            .putLong("lastLossMs",   lastLossTimeMs)
             .putInt("totalTrades",  totalTrades)
             .putInt("totalWins",    totalWins)
             .putFloat("totalPnl",   (float) totalPnlUsd)
@@ -116,47 +124,47 @@ public class DexAppStore {
     }
 
     private void load() {
-        bnbAddress         = prefs.getString("bnbAddress", "");
-        solAddress         = prefs.getString("solAddress", "");
-        stopLossPercent    = prefs.getFloat("stopLoss",  1.5f);
-        takeProfitPercent  = prefs.getFloat("takeProfit",3.0f);
-        minMomentumPercent = prefs.getFloat("minMom",   1.0f);
-        minLiquidityUsd    = prefs.getFloat("minLiq",   25000f);
-        minPairAgeHours    = prefs.getInt("minAge",     0);
-        maxPositions       = prefs.getInt("maxPos",     3);
-        maxDailyTrades     = prefs.getInt("maxDaily",   10);
-        maxScanTokens      = prefs.getInt("maxScanTok", 30);
-        autoMode           = prefs.getBoolean("autoMode", false);
-        scanIntervalMin    = prefs.getInt("scanMin",    5);
-        maxHoldMinutes     = prefs.getInt("maxHold",    15);
-        minAlgoScore       = prefs.getInt("minAlgoScore",   55);
-        useTrailingStop    = prefs.getBoolean("trailStop",   true);
-        trailingStopPct    = prefs.getFloat("trailPct",      1.0f);
+        bnbAddress          = prefs.getString("bnbAddress", "");
+        solAddress          = prefs.getString("solAddress", "");
+        stopLossPercent     = prefs.getFloat("stopLoss",  1.5f);
+        takeProfitPercent   = prefs.getFloat("takeProfit",3.0f);
+        minMomentumPercent  = prefs.getFloat("minMom",   1.0f);
+        minLiquidityUsd     = prefs.getFloat("minLiq",   25000f);
+        minPairAgeHours     = prefs.getInt("minAge",     0);
+        maxPositions        = prefs.getInt("maxPos",     3);
+        maxDailyTrades      = prefs.getInt("maxDaily",   10);
+        maxScanTokens       = prefs.getInt("maxScanTok", 30);
+        autoMode            = prefs.getBoolean("autoMode", false);
+        scanIntervalMin     = prefs.getInt("scanMin",    5);
+        maxHoldMinutes      = prefs.getInt("maxHold",    15);
+        minAlgoScore        = prefs.getInt("minAlgoScore",   55);
+        useTrailingStop     = prefs.getBoolean("trailStop",   true);
+        trailingStopPct     = prefs.getFloat("trailPct",      1.0f);
+        breakEvenTriggerPct = prefs.getFloat("breakEvenPct",  1.5f);
         liveMode            = prefs.getBoolean("liveMode",   false);
         liveChainBnb        = prefs.getBoolean("liveBnb",    false);
         liveChainSol        = prefs.getBoolean("liveSol",    false);
         tradeAmountUsd      = prefs.getFloat("tradeAmt",     0f);
         paperTradeAmountUsd = prefs.getFloat("paperAmt",     10.0f);
         slippageBps         = prefs.getInt("slippageBps",    300);
-        telegramToken      = prefs.getString("tgToken",  "");
-        telegramChatId     = prefs.getString("tgChat",   "");
-        mlStrategy         = prefs.getString("mlStrat",  "BALANCED");
-        mlGeneration       = prefs.getInt("mlGen",      0);
-        mlWinRate          = prefs.getFloat("mlWR",     0f);
-        maxDailyLossUsd    = prefs.getFloat("maxDailyLoss", 0f);
-        dailyPnlUsd        = prefs.getFloat("dailyPnl",     0f);
-        totalTrades        = prefs.getInt("totalTrades",0);
-        totalWins          = prefs.getInt("totalWins",  0);
-        totalPnlUsd        = prefs.getFloat("totalPnl", 0f);
-        tradesToday        = prefs.getInt("tradesToday",0);
-        lastTradeDay       = prefs.getLong("lastDay",   0L);
-        botRunning         = prefs.getBoolean("botRunning", false);
+        telegramToken       = prefs.getString("tgToken",  "");
+        telegramChatId      = prefs.getString("tgChat",   "");
+        mlStrategy          = prefs.getString("mlStrat",  "BALANCED");
+        mlGeneration        = prefs.getInt("mlGen",      0);
+        mlWinRate           = prefs.getFloat("mlWR",     0f);
+        maxDailyLossUsd     = prefs.getFloat("maxDailyLoss", 0f);
+        dailyPnlUsd         = prefs.getFloat("dailyPnl",     0f);
+        lastLossTimeMs      = prefs.getLong("lastLossMs",    0L);
+        totalTrades         = prefs.getInt("totalTrades",0);
+        totalWins           = prefs.getInt("totalWins",  0);
+        totalPnlUsd         = prefs.getFloat("totalPnl", 0f);
+        tradesToday         = prefs.getInt("tradesToday",0);
+        lastTradeDay        = prefs.getLong("lastDay",   0L);
+        botRunning          = prefs.getBoolean("botRunning", false);
     }
 
     public void reload() { load(); }
 
-    /** Resets the daily trade counter when the calendar day rolls over,
-     *  even if no trade was opened (e.g. bot ran idle past midnight). */
     public void rolloverDayIfNeeded() {
         long today = System.currentTimeMillis() / 86_400_000L;
         if (today != lastTradeDay) {
@@ -171,9 +179,19 @@ public class DexAppStore {
         return maxDailyLossUsd > 0 && dailyPnlUsd <= -maxDailyLossUsd;
     }
 
-    public String getMnemonic()             { return secure.loadMnemonic(); }
-    public boolean hasWallet()              { return !bnbAddress.isEmpty(); }
-    public boolean hasTelegram()            { return !telegramToken.isEmpty() && !telegramChatId.isEmpty(); }
+    public boolean isRevengeTradeCooldownActive() {
+        if (lastLossTimeMs <= 0) return false;
+        return (System.currentTimeMillis() - lastLossTimeMs) < REVENGE_COOLDOWN_MS;
+    }
+
+    public long revengeCooldownRemainingMs() {
+        if (!isRevengeTradeCooldownActive()) return 0;
+        return REVENGE_COOLDOWN_MS - (System.currentTimeMillis() - lastLossTimeMs);
+    }
+
+    public String getMnemonic()         { return secure.loadMnemonic(); }
+    public boolean hasWallet()          { return !bnbAddress.isEmpty(); }
+    public boolean hasTelegram()        { return !telegramToken.isEmpty() && !telegramChatId.isEmpty(); }
 
     public void saveMnemonic(String m) {
         try {
@@ -199,6 +217,7 @@ public class DexAppStore {
                 r.tokenName     = o.optString("name");
                 r.tokenSymbol   = o.optString("sym");
                 r.tokenAddress  = o.optString("addr");
+                r.pairAddress   = o.optString("pair", "");
                 r.chain         = o.optString("chain");
                 r.entryPrice    = o.optDouble("entry");
                 r.exitPrice     = o.optDouble("exit");
@@ -212,13 +231,17 @@ public class DexAppStore {
                 r.exitReason    = o.optString("reason");
                 r.strategyName  = o.optString("strat");
                 r.confidenceScore = o.optInt("conf");
-                r.isLive         = o.optBoolean("live");
-                r.buyTxHash      = o.optString("buyTx",  "");
-                r.sellTxHash     = o.optString("sellTx", "");
-                r.entryAlgoScore = o.optInt("algoEntry", 0);
-                r.exitAlgoScore  = o.optInt("algoExit",  0);
-                r.algoSignal     = o.optString("algoSig", "");
-                r.peakPrice      = o.optDouble("peak",   0);
+                r.isLive        = o.optBoolean("live");
+                r.buyTxHash     = o.optString("buyTx",  "");
+                r.sellTxHash    = o.optString("sellTx", "");
+                r.liquidityAtEntry = o.optDouble("liqEntry", 0);
+                r.volumeAtEntry    = o.optDouble("volEntry",  0);
+                r.fdvAtEntry       = o.optDouble("fdvEntry",  0);
+                r.scamScore        = o.optInt("scamScore",    0);
+                r.entryAlgoScore   = o.optInt("algoEntry",    0);
+                r.exitAlgoScore    = o.optInt("algoExit",     0);
+                r.algoSignal       = o.optString("algoSig",  "");
+                r.peakPrice        = o.optDouble("peak",       0);
                 list.add(r);
             }
         } catch (Exception ignored) {}
@@ -234,6 +257,7 @@ public class DexAppStore {
                 o.put("name",  r.tokenName);
                 o.put("sym",   r.tokenSymbol);
                 o.put("addr",  r.tokenAddress);
+                o.put("pair",  r.pairAddress);
                 o.put("chain", r.chain);
                 o.put("entry", r.entryPrice);
                 o.put("exit",  r.exitPrice);
@@ -247,13 +271,17 @@ public class DexAppStore {
                 o.put("reason",r.exitReason);
                 o.put("strat", r.strategyName);
                 o.put("conf",  r.confidenceScore);
-                o.put("live",     r.isLive);
-                o.put("buyTx",    r.buyTxHash);
-                o.put("sellTx",   r.sellTxHash);
-                o.put("algoEntry",r.entryAlgoScore);
-                o.put("algoExit", r.exitAlgoScore);
-                o.put("algoSig",  r.algoSignal);
-                o.put("peak",     r.peakPrice);
+                o.put("live",  r.isLive);
+                o.put("buyTx",  r.buyTxHash);
+                o.put("sellTx", r.sellTxHash);
+                o.put("liqEntry",  r.liquidityAtEntry);
+                o.put("volEntry",  r.volumeAtEntry);
+                o.put("fdvEntry",  r.fdvAtEntry);
+                o.put("scamScore", r.scamScore);
+                o.put("algoEntry", r.entryAlgoScore);
+                o.put("algoExit",  r.exitAlgoScore);
+                o.put("algoSig",   r.algoSignal);
+                o.put("peak",      r.peakPrice);
                 arr.put(o);
             }
             prefs.edit().putString("trades", arr.toString()).apply();
@@ -266,6 +294,7 @@ public class DexAppStore {
         r.tokenName     = c.name;
         r.tokenSymbol   = c.symbol;
         r.tokenAddress  = c.tokenAddress;
+        r.pairAddress   = c.pairAddress;
         r.chain         = c.chain;
         r.entryPrice    = c.priceUsd;
         r.openTimeMs    = System.currentTimeMillis();
@@ -276,6 +305,11 @@ public class DexAppStore {
         r.amountUsd       = liveMode ? tradeAmountUsd : paperTradeAmountUsd;
         r.isLive          = liveMode;
         r.peakPrice       = c.priceUsd;
+        // Market snapshot at entry
+        r.liquidityAtEntry = c.liquidityUsd;
+        r.volumeAtEntry    = c.volumeUsd24h;
+        r.fdvAtEntry       = c.fdv;
+        r.scamScore        = c.scamRiskScore;
         List<TradeRecord> list = loadHistory();
         list.add(0, r);
         if (list.size() > 500) list = list.subList(0, 500);
@@ -304,6 +338,7 @@ public class DexAppStore {
                 r.isWin       = r.pnlUsd > 0;
                 totalTrades++;
                 if (r.isWin) totalWins++;
+                else lastLossTimeMs = System.currentTimeMillis(); // revenge-trade cooldown
                 totalPnlUsd += r.pnlUsd;
                 dailyPnlUsd += r.pnlUsd;
                 mlWinRate    = totalTrades > 0 ? (double) totalWins / totalTrades * 100.0 : 0;
@@ -325,5 +360,54 @@ public class DexAppStore {
 
     public int openPositionCount() {
         return getOpenPositions().size();
+    }
+
+    // ── Extended Stats ────────────────────────────────────────────────────
+
+    public static class Stats {
+        public double avgWinUsd      = 0;
+        public double avgLossUsd     = 0;
+        public double maxDrawdownUsd = 0;
+        public double profitFactor   = 0;
+        public int    maxLossStreak  = 0;
+        public int    curLossStreak  = 0;
+        public double expectancyUsd  = 0;  // average P/L per trade
+    }
+
+    public Stats computeStats() {
+        Stats s = new Stats();
+        List<TradeRecord> closed = new ArrayList<>();
+        for (TradeRecord r : loadHistory())
+            if (!r.isOpen) closed.add(r);
+        if (closed.isEmpty()) return s;
+
+        double totalWinAmt = 0, totalLossAmt = 0;
+        int wins = 0, losses = 0, streak = 0;
+        double runningPnl = 0, peakPnl = 0;
+
+        for (TradeRecord r : closed) {
+            if (r.isWin) {
+                totalWinAmt += r.pnlUsd;
+                wins++;
+                streak = 0;
+            } else {
+                totalLossAmt += Math.abs(r.pnlUsd);
+                losses++;
+                streak++;
+                if (streak > s.maxLossStreak) s.maxLossStreak = streak;
+            }
+            runningPnl += r.pnlUsd;
+            if (runningPnl > peakPnl) peakPnl = runningPnl;
+            double dd = peakPnl - runningPnl;
+            if (dd > s.maxDrawdownUsd) s.maxDrawdownUsd = dd;
+        }
+
+        s.curLossStreak = streak;
+        s.avgWinUsd     = wins   > 0 ? totalWinAmt  / wins   : 0;
+        s.avgLossUsd    = losses > 0 ? totalLossAmt / losses  : 0;
+        s.profitFactor  = totalLossAmt > 0 ? totalWinAmt / totalLossAmt
+                        : (totalWinAmt > 0 ? 99.9 : 0);
+        s.expectancyUsd = closed.isEmpty() ? 0 : (totalWinAmt - totalLossAmt) / closed.size();
+        return s;
     }
 }
