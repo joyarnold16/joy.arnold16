@@ -35,14 +35,6 @@ public class BotEvolution {
     private static String lastChangeSummary = "";
 
     public static void evolve(DexAppStore store) {
-        // Manual Mode is a hard lock: ML may NOT change any user setting.
-        // Guards every caller (engine + the "Evolve Now" button) so a user's
-        // manually-set params (min liquidity, SL/TP, etc.) persist across any
-        // number of trade executions.
-        if (!store.autoMode) {
-            Log.i(TAG, "Manual mode — evolution skipped, user settings locked");
-            return;
-        }
         List<TradeRecord> history = store.loadHistory();
         int closedCount = 0;
         for (TradeRecord r : history) if (!r.isOpen) closedCount++;
@@ -62,6 +54,25 @@ public class BotEvolution {
         double prevTp = store.takeProfitPercent;
         int prevAlgo  = store.minAlgoScore;
 
+        // ML learns in BOTH modes — the generation counter always advances.
+        store.mlGeneration++;
+
+        if (!store.autoMode) {
+            // MANUAL MODE: ML keeps evolving but must NOT change any
+            // control-dashboard setting. Only the generation counter is
+            // persisted; the user's params stay exactly as they set them,
+            // no matter how many trades execute. We record what ML *would*
+            // recommend so it's visible, without applying it.
+            store.save();
+            lastChangeSummary = String.format(
+                "Manual mode — your settings kept. ML suggests %s (SL %.1f%% · TP %.1f%% · AlgoMin %d). Not applied.",
+                best.name, best.sl, best.tp, best.minAlgoScore);
+            Log.i(TAG, "Evolved (manual, not applied) gen" + store.mlGeneration
+                + " | " + lastChangeSummary);
+            return;
+        }
+
+        // AUTO MODE: apply the evolved params to the live config.
         store.mlStrategy         = best.name;
         store.stopLossPercent    = best.sl;
         store.takeProfitPercent  = best.tp;
@@ -71,7 +82,6 @@ public class BotEvolution {
         store.maxHoldMinutes     = best.maxHold;
         store.minAlgoScore       = best.minAlgoScore;
         store.trailingStopPct    = best.trailPct;
-        store.mlGeneration++;
         store.save();
 
         StringBuilder sb = new StringBuilder();

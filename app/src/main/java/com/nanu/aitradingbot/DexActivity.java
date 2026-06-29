@@ -967,10 +967,12 @@ public class DexActivity extends Activity {
                 + "  |  AlgoMin: " + store.minAlgoScore, 11, WHITE, Typeface.NORMAL);
         } else {
             tv2(autoCard, "🔒 MANUAL MODE — your settings are permanent", 13, GREEN, Typeface.BOLD);
-            tv2(autoCard, "ML is fully disabled. Every value you set (min liquidity, SL, TP, hold, "
-                + "algo score…) stays exactly as you saved it — no trade will ever auto-change them, "
-                + "no matter how many execute.", 11, GREY, Typeface.NORMAL);
-            tv2(autoCard, "Enable Auto Mode to hand strategy control to the ML evolver.", 11, GREY, Typeface.NORMAL);
+            tv2(autoCard, "ML keeps learning and advancing generations in the background, but it will "
+                + "NEVER change your settings (min liquidity, SL, TP, hold, algo score…). Every value "
+                + "you set stays exactly as you saved it, no matter how many trades execute.",
+                11, GREY, Typeface.NORMAL);
+            tv2(autoCard, "ML's suggestion appears under ML Evolution Status. Enable Auto Mode to let it apply.",
+                11, GREY, Typeface.NORMAL);
         }
 
         // ML Evolution Status Card
@@ -982,14 +984,11 @@ public class DexActivity extends Activity {
         mlCard.addView(gap(8));
         LinearLayout mlBtns = row(0, 0);
         Button evolveNow = btn("Evolve Now", PURPLE, v -> {
-            if (!store.autoMode) {
-                alert("Manual Mode",
-                    "Settings are locked in Manual Mode — ML will not change them.\n\n"
-                    + "Turn Auto Mode ON if you want the ML evolver to manage the strategy.");
-                return;
-            }
             BotEvolution.evolve(store);
-            Toast.makeText(this, "ML evolved! Gen " + store.mlGeneration, Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, store.autoMode
+                    ? "ML evolved! Gen " + store.mlGeneration
+                    : "ML learned (Gen " + store.mlGeneration + ") — your manual settings kept",
+                Toast.LENGTH_SHORT).show();
             buildControl();
         });
         Button resetMl = btn("Reset ML", AMBER, v ->
