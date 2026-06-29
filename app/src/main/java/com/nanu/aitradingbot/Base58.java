@@ -21,4 +21,29 @@ public class Base58 {
         }
         return sb.reverse().toString();
     }
+
+    /** Decodes a Base58 string back to bytes. Throws on an invalid character. */
+    public static byte[] decode(String input) {
+        BigInteger num = BigInteger.ZERO;
+        for (int i = 0; i < input.length(); i++) {
+            int digit = indexOf(input.charAt(i));
+            if (digit < 0)
+                throw new IllegalArgumentException("Invalid Base58 char: " + input.charAt(i));
+            num = num.multiply(BASE).add(BigInteger.valueOf(digit));
+        }
+        byte[] bytes = num.toByteArray();
+        // BigInteger may prepend a sign byte (0x00) — strip it.
+        int start = (bytes.length > 1 && bytes[0] == 0) ? 1 : 0;
+        // Restore leading-zero bytes that Base58 encodes as leading '1's.
+        int leadingZeros = 0;
+        for (int i = 0; i < input.length() && input.charAt(i) == ALPHABET[0]; i++) leadingZeros++;
+        byte[] out = new byte[leadingZeros + (bytes.length - start)];
+        System.arraycopy(bytes, start, out, leadingZeros, bytes.length - start);
+        return out;
+    }
+
+    private static int indexOf(char c) {
+        for (int i = 0; i < ALPHABET.length; i++) if (ALPHABET[i] == c) return i;
+        return -1;
+    }
 }

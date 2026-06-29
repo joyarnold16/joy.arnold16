@@ -773,11 +773,33 @@ public class DexActivity extends Activity {
         // Withdraw
         LinearLayout wdCard = card(p);
         tv2(wdCard, "WITHDRAW", 14, WHITE, Typeface.BOLD);
-        tv2(wdCard, "Requires live mode. Signing not yet active in paper mode.",
-            11, GREY, Typeface.NORMAL);
+        if (!store.liveMode) {
+            tv2(wdCard, "Requires Live Mode — paper mode cannot sign transactions. "
+                + "Enable Live Mode in the Control tab.", 11, AMBER, Typeface.NORMAL);
+        } else {
+            tv2(wdCard, "Sends REAL funds on-chain. Double-check the address — transfers are irreversible.",
+                11, RED, Typeface.NORMAL);
+        }
         wdCard.addView(gap(8));
+
+        // Chain selector (BNB / SOL)
+        final String[] wdChain = { "bnb" };
+        LinearLayout chainRow = row(0, 0);
+        Button bnbSel = btn("BNB", AMBER, null);
+        Button solSel = btn("SOL", PURPLE, null);
+        Runnable paintSel = () -> {
+            bnbSel.setAlpha("bnb".equals(wdChain[0]) ? 1f : 0.4f);
+            solSel.setAlpha("sol".equals(wdChain[0]) ? 1f : 0.4f);
+        };
+        bnbSel.setOnClickListener(v -> { wdChain[0] = "bnb"; paintSel.run(); });
+        solSel.setOnClickListener(v -> { wdChain[0] = "sol"; paintSel.run(); });
+        chainRow.addView(bnbSel); chainRow.addView(gap(8)); chainRow.addView(solSel);
+        wdCard.addView(chainRow);
+        paintSel.run();
+        wdCard.addView(gap(8));
+
         withdrawAddressField = input(wdCard, "Destination address");
-        EditText amount = input(wdCard, "Amount");
+        EditText amount = input(wdCard, "Amount (BNB or SOL)");
         amount.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         wdCard.addView(gap(4));
         Button qrScanBtn = bigBtn("Scan QR Address (coming soon)", CARD);
@@ -785,15 +807,53 @@ public class DexActivity extends Activity {
             Toast.makeText(this, "QR scanner will be added in next update", Toast.LENGTH_SHORT).show());
         wdCard.addView(qrScanBtn);
         wdCard.addView(gap(8));
-        Button wdBtn = bigBtn(store.liveMode ? "Withdraw" : "Signing not yet active", GREY);
+        Button wdBtn = bigBtn(store.liveMode ? "Withdraw" : "Live Mode required",
+            store.liveMode ? AMBER : GREY);
         wdBtn.setOnClickListener(v -> {
             if (!store.liveMode) {
-                alert("Withdraw disabled", "Enable live mode in Control tab first. Paper mode cannot sign transactions.");
-            } else {
-                alert("Confirm Withdraw",
-                    "Send " + amount.getText() + " to:\n" + withdrawAddressField.getText()
-                    + "\n\nThis is a real transaction.");
+                alert("Withdraw disabled",
+                    "Enable Live Mode in the Control tab first. Paper mode cannot sign transactions.");
+                return;
             }
+            String dest = withdrawAddressField.getText().toString().trim();
+            double amt;
+            try { amt = Double.parseDouble(amount.getText().toString().trim()); }
+            catch (Exception e) { Toast.makeText(this, "Enter a valid amount", Toast.LENGTH_SHORT).show(); return; }
+            if (dest.isEmpty()) { Toast.makeText(this, "Enter a destination address", Toast.LENGTH_SHORT).show(); return; }
+            if (amt <= 0) { Toast.makeText(this, "Amount must be greater than 0", Toast.LENGTH_SHORT).show(); return; }
+            String coin = "bnb".equals(wdChain[0]) ? "BNB" : "SOL";
+            new AlertDialog.Builder(this)
+                .setTitle("Confirm Withdraw")
+                .setMessage("Send " + amt + " " + coin + " to:\n\n" + dest
+                    + "\n\nThis is a REAL, irreversible on-chain transaction.")
+                .setPositiveButton("Send", (d, w) -> {
+                    wdBtn.setEnabled(false);
+                    wdBtn.setText("Sending…");
+                    WithdrawEngine.withdraw(store, wdChain[0], dest, amt,
+                        new WithdrawEngine.WithdrawCallback() {
+                            @Override public void onSuccess(String txHash) {
+                                ui.post(() -> {
+                                    wdBtn.setEnabled(true);
+                                    wdBtn.setText("Withdraw");
+                                    new AlertDialog.Builder(DexActivity.this)
+                                        .setTitle("Withdraw sent")
+                                        .setMessage("Transaction:\n" + txHash)
+                                        .setPositiveButton("Copy", (dd, ww) -> copy(txHash))
+                                        .setNegativeButton("Close", null)
+                                        .show();
+                                });
+                            }
+                            @Override public void onFail(String reason) {
+                                ui.post(() -> {
+                                    wdBtn.setEnabled(true);
+                                    wdBtn.setText("Withdraw");
+                                    alert("Withdraw failed", reason);
+                                });
+                            }
+                        });
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
         });
         wdCard.addView(wdBtn);
 
@@ -906,10 +966,11 @@ public class DexActivity extends Activity {
                 + "  |  Hold: " + store.maxHoldMinutes + "min"
                 + "  |  AlgoMin: " + store.minAlgoScore, 11, WHITE, Typeface.NORMAL);
         } else {
-            tv2(autoCard, "DISABLED — Manual mode active", 13, GREY, Typeface.NORMAL);
-            tv2(autoCard, "Enable to let the ML bot decide all trade parameters automatically. "
-                + "It evolves with every closed trade in paper mode and the same learned strategy "
-                + "applies seamlessly when you switch to live mode.", 11, GREY, Typeface.NORMAL);
+            tv2(autoCard, "🔒 MANUAL MODE — your settings are permanent", 13, GREEN, Typeface.BOLD);
+            tv2(autoCard, "ML is fully disabled. Every value you set (min liquidity, SL, TP, hold, "
+                + "algo score…) stays exactly as you saved it — no trade will ever auto-change them, "
+                + "no matter how many execute.", 11, GREY, Typeface.NORMAL);
+            tv2(autoCard, "Enable Auto Mode to hand strategy control to the ML evolver.", 11, GREY, Typeface.NORMAL);
         }
 
         // ML Evolution Status Card
@@ -921,6 +982,12 @@ public class DexActivity extends Activity {
         mlCard.addView(gap(8));
         LinearLayout mlBtns = row(0, 0);
         Button evolveNow = btn("Evolve Now", PURPLE, v -> {
+            if (!store.autoMode) {
+                alert("Manual Mode",
+                    "Settings are locked in Manual Mode — ML will not change them.\n\n"
+                    + "Turn Auto Mode ON if you want the ML evolver to manage the strategy.");
+                return;
+            }
             BotEvolution.evolve(store);
             Toast.makeText(this, "ML evolved! Gen " + store.mlGeneration, Toast.LENGTH_SHORT).show();
             buildControl();
@@ -954,6 +1021,18 @@ public class DexActivity extends Activity {
         EditText minMom  = infoRow(scanCard, "Min momentum (% 1h)",
             String.valueOf(store.minMomentumPercent),
             "Minimum 1-hour price movement % to consider a token. Filters out stagnant tokens.");
+        // Min liquidity / pair age / momentum are ML-managed. In Auto Mode they are
+        // locked (ML overwrites them after each trade); in Manual Mode they are yours
+        // and never change.
+        if (store.autoMode) {
+            for (EditText f : new EditText[]{minLiq, minAge, minMom}) {
+                f.setEnabled(false);
+                f.setTextColor(GREY);
+            }
+            tv2(scanCard, "🔒 Min liquidity / pair age / momentum are managed by ML in Auto Mode. "
+                + "Turn Auto Mode OFF to set them permanently.", 11, PURPLE, Typeface.NORMAL);
+            scanCard.addView(gap(6));
+        }
         EditText maxPos  = infoRow(scanCard, "Max simultaneous positions",
             String.valueOf(store.maxPositions),
             "Maximum number of open paper positions at once. Prevents over-exposure.");
@@ -974,9 +1053,12 @@ public class DexActivity extends Activity {
         saveBtn.setOnClickListener(v -> {
             try {
                 store.scanIntervalMin    = Integer.parseInt(scanInt.getText().toString());
-                store.minLiquidityUsd   = Double.parseDouble(minLiq.getText().toString());
-                store.minPairAgeHours   = Integer.parseInt(minAge.getText().toString());
-                store.minMomentumPercent = Double.parseDouble(minMom.getText().toString());
+                // ML-managed fields are only writable in Manual Mode.
+                if (!store.autoMode) {
+                    store.minLiquidityUsd    = Double.parseDouble(minLiq.getText().toString());
+                    store.minPairAgeHours    = Integer.parseInt(minAge.getText().toString());
+                    store.minMomentumPercent = Double.parseDouble(minMom.getText().toString());
+                }
                 store.maxPositions      = Integer.parseInt(maxPos.getText().toString());
                 int tok = Integer.parseInt(maxTok.getText().toString());
                 store.maxScanTokens     = Math.min(90, Math.max(5, tok));

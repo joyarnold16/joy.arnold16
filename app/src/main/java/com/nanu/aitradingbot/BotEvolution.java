@@ -35,6 +35,14 @@ public class BotEvolution {
     private static String lastChangeSummary = "";
 
     public static void evolve(DexAppStore store) {
+        // Manual Mode is a hard lock: ML may NOT change any user setting.
+        // Guards every caller (engine + the "Evolve Now" button) so a user's
+        // manually-set params (min liquidity, SL/TP, etc.) persist across any
+        // number of trade executions.
+        if (!store.autoMode) {
+            Log.i(TAG, "Manual mode — evolution skipped, user settings locked");
+            return;
+        }
         List<TradeRecord> history = store.loadHistory();
         int closedCount = 0;
         for (TradeRecord r : history) if (!r.isOpen) closedCount++;
