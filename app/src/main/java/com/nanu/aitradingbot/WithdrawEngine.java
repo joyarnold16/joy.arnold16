@@ -120,7 +120,10 @@ public class WithdrawEngine {
         try { toPub = Base58.decode(to); }
         catch (Exception e) { cb.onFail("Invalid Solana address."); return; }
         if (toPub.length != 32) { cb.onFail("Invalid Solana address (must decode to 32 bytes)."); return; }
-        byte[] fromPub = Base58.decode(store.solAddress);
+        byte[] fromPub;
+        try { fromPub = Base58.decode(store.solAddress); }
+        catch (Exception e) { cb.onFail("Wallet not ready (no Solana address)."); return; }
+        if (fromPub.length != 32) { cb.onFail("Wallet not ready (no Solana address)."); return; }
 
         long lamports = (long) (amountSol * LAMPORTS_PER_SOL);
         long need     = lamports + SOL_FEE_LAMPORTS;

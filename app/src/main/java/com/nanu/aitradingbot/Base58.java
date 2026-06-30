@@ -32,8 +32,12 @@ public class Base58 {
             num = num.multiply(BASE).add(BigInteger.valueOf(digit));
         }
         byte[] bytes = num.toByteArray();
-        // BigInteger may prepend a sign byte (0x00) — strip it.
-        int start = (bytes.length > 1 && bytes[0] == 0) ? 1 : 0;
+        // Skip every leading 0x00 byte from the BigInteger encoding: the sign
+        // byte for values whose MSB is set, and the lone 0x00 that toByteArray()
+        // produces for zero. Leading zero *value* bytes are never in the numeric
+        // portion — they are carried by the leading '1's below.
+        int start = 0;
+        while (start < bytes.length && bytes[start] == 0) start++;
         // Restore leading-zero bytes that Base58 encodes as leading '1's.
         int leadingZeros = 0;
         for (int i = 0; i < input.length() && input.charAt(i) == ALPHABET[0]; i++) leadingZeros++;
