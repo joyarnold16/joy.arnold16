@@ -10,8 +10,8 @@ android {
         applicationId "com.nanu.aitradingbot"
         minSdk 24
         targetSdk 35
-        versionCode 128
-        versionName "12.4-nanu (build 128)"
+        versionCode 129
+        versionName "12.5-nanu (build 129)"
         multiDexEnabled true
     }
 
@@ -60,4 +60,6 @@ dependencies {
 
     // QR code generate
     implementation 'com.google.zxing:core:3.5.3'
+    // QR code scan (camera capture activity; builds on zxing:core above)
+    implementation 'com.journeyapps:zxing-android-embedded:4.3.0'
 }

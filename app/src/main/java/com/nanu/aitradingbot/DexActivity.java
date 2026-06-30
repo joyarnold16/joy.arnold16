@@ -21,6 +21,8 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.*;
+import com.google.zxing.integration.android.IntentIntegrator;
+import com.google.zxing.integration.android.IntentResult;
 import java.io.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -105,8 +107,26 @@ public class DexActivity extends Activity {
     }
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        IntentResult result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
+        if (result != null && result.getContents() != null) {
+            String addr = cleanScannedAddress(result.getContents());
+            if (withdrawAddressField != null) {
+                withdrawAddressField.setText(addr);
+                Toast.makeText(this, "Address scanned", Toast.LENGTH_SHORT).show();
+            }
+            return;
+        }
         super.onActivityResult(requestCode, resultCode, data);
-        // QR scanner result handled here when scanner library is added
+    }
+
+    /** Strips a wallet-URI scheme (e.g. "ethereum:", "solana:") and any "?…" query. */
+    private String cleanScannedAddress(String raw) {
+        String addr = raw.trim();
+        int q = addr.indexOf('?');
+        if (q >= 0) addr = addr.substring(0, q);
+        int colon = addr.indexOf(':');
+        if (colon >= 0 && colon < 12) addr = addr.substring(colon + 1);
+        return addr.trim();
     }
 
     // —— Wallet ———————————————————————————————————————
@@ -802,9 +822,15 @@ public class DexActivity extends Activity {
         EditText amount = input(wdCard, "Amount (BNB or SOL)");
         amount.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         wdCard.addView(gap(4));
-        Button qrScanBtn = bigBtn("Scan QR Address (coming soon)", CARD);
-        qrScanBtn.setOnClickListener(v ->
-            Toast.makeText(this, "QR scanner will be added in next update", Toast.LENGTH_SHORT).show());
+        Button qrScanBtn = bigBtn("Scan QR Address", CARD);
+        qrScanBtn.setOnClickListener(v -> {
+            IntentIntegrator integrator = new IntentIntegrator(this);
+            integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
+            integrator.setPrompt("Scan a wallet address");
+            integrator.setOrientationLocked(true);
+            integrator.setBeepEnabled(false);
+            integrator.initiateScan();
+        });
         wdCard.addView(qrScanBtn);
         wdCard.addView(gap(8));
         Button wdBtn = bigBtn(store.liveMode ? "Withdraw" : "Live Mode required",
