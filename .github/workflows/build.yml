@@ -31,8 +31,8 @@ jobs:
       - name: Create local.properties
         run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
-      - name: Build Release APK
-        run: gradle assembleRelease --no-daemon --stacktrace
+      - name: Build Release APK + AAB
+        run: gradle assembleRelease bundleRelease --no-daemon --stacktrace
         env:
           JAVA_OPTS: "-Xmx4g"
 
@@ -49,16 +49,35 @@ jobs:
         env:
           BUILD_TOOLS_VERSION: "34.0.0"
 
+      - name: Sign AAB (Play Store upload bundle)
+        id: sign_aab
+        continue-on-error: true
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: app/build/outputs/bundle/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+        env:
+          BUILD_TOOLS_VERSION: "34.0.0"
+
       - name: Rename APK for release
         if: steps.sign_app.outcome == 'success'
         run: cp "${{ steps.sign_app.outputs.signedReleaseFile }}" nanu-ai-trading-bot.apk
 
-      - name: Publish GitHub Release with direct APK
+      - name: Rename AAB for release
+        if: steps.sign_aab.outcome == 'success'
+        run: cp "${{ steps.sign_aab.outputs.signedReleaseFile }}" nanu-ai-trading-bot.aab
+
+      - name: Publish GitHub Release with direct APK + AAB
         if: steps.sign_app.outcome == 'success'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: Nanu AI Trading Bot
-          body: "Latest build — tap nanu-ai-trading-bot.apk to download directly"
-          files: nanu-ai-trading-bot.apk
+          body: "Latest build — tap nanu-ai-trading-bot.apk to install directly, or upload nanu-ai-trading-bot.aab to Google Play Console"
+          files: |
+            nanu-ai-trading-bot.apk
+            nanu-ai-trading-bot.aab
           prerelease: false
