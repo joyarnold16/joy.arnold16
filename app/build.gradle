@@ -2,6 +2,18 @@ plugins {
     id 'com.android.application'
 }
 
+// Release signing reads from app/release.keystore + keystore.properties, both
+// git-ignored - never commit the actual keystore or passwords to this public
+// repo. Locally: drop release.keystore here and a keystore.properties (see
+// keystore.properties.example) at the repo root. In CI: the release workflow
+// decodes a base64 secret into release.keystore and passes the rest as env vars.
+def keystorePropsFile = rootProject.file('keystore.properties')
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+def releaseStoreFile = file('release.keystore')
+
 android {
     namespace 'com.joy.blastgrid'
     compileSdk 35
@@ -16,8 +28,22 @@ android {
         versionName "1.0"
     }
 
+    signingConfigs {
+        release {
+            if (releaseStoreFile.exists()) {
+                storeFile releaseStoreFile
+                storePassword keystoreProps.getProperty('storePassword', System.getenv('RELEASE_STORE_PASSWORD'))
+                keyAlias keystoreProps.getProperty('keyAlias', System.getenv('RELEASE_KEY_ALIAS'))
+                keyPassword keystoreProps.getProperty('keyPassword', System.getenv('RELEASE_KEY_PASSWORD'))
+            }
+        }
+    }
+
     buildTypes {
         release {
+            // Unsigned (and un-uploadable to Play) until release.keystore is
+            // supplied - see the comment above signingConfigs.
+            if (releaseStoreFile.exists()) signingConfig signingConfigs.release
             // Nothing here is reflection- or JNI-backed, so there is nothing for R8
             // to strip incorrectly. Left off anyway: the app is one HTML asset,
             // and shrinking buys almost nothing while risking a silent breakage.
