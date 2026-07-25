@@ -129,8 +129,19 @@
     box-shadow:inset 0 0 0 11px #f0c246;
   }
   .drop.on{filter:brightness(1.3);transform:scale(.95)}
+  .detonate{
+    position:fixed;z-index:5;
+    right:calc(122px + env(safe-area-inset-right));bottom:calc(34px + env(safe-area-inset-bottom));
+    width:60px;height:60px;border-radius:50%;
+    background:var(--panel);border:2px solid var(--hazard);color:var(--hazard);
+    font-size:22px;line-height:1;display:flex;align-items:center;justify-content:center;
+    touch-action:none;cursor:pointer;
+  }
+  .detonate.on{filter:brightness(1.4);transform:scale(.93)}
   .desk{display:none;position:fixed;left:0;right:0;bottom:14px;text-align:center;font-size:10px;color:var(--dim);letter-spacing:.08em}
-  @media (min-width:820px){ .drop{display:none} #joyzone{display:none} .desk{display:block} }
+  @media (hover:hover) and (pointer:fine){
+    .drop{display:none} .detonate{display:none} #joyzone{display:none} .desk{display:block}
+  }
 </style>
 </head>
 <body>
@@ -144,7 +155,7 @@
       <h2>Demolition Site <em>07</em></h2>
       <p id="ov-text">Drop charges, scrap the patrol drones, reach the lift shaft. Blasts throw you. Smoke chokes you. Pallets catch and spread fire. Columns come down if you hit them enough.</p>
       <div class="keys" id="ov-keys">
-        <span><b>Drag</b> move</span><span><b>CHARGE</b> place</span><span><b>push</b> to shove a charge</span>
+        <span><b>Drag</b> move</span><span><b>CHARGE</b> place</span><span><b>&#9889;</b> detonate now</span><span><b>push</b> to shove a charge</span>
       </div>
       <div class="career" id="career"></div>
       <button class="cta" id="ov-btn">Begin shift</button>
@@ -160,7 +171,7 @@
   <div class="hudbar" id="hudbar">
     <div class="bar">
       <div class="mark">Demolition Site <em>07</em></div>
-      <div class="desk">move &nbsp;&#183;&nbsp; space charge &nbsp;&#183;&nbsp; push a charge to shove it &nbsp;&#183;&nbsp; R restart &nbsp;&#183;&nbsp; P pause</div>
+      <div class="desk">move &nbsp;&#183;&nbsp; space charge &nbsp;&#183;&nbsp; E detonate now &nbsp;&#183;&nbsp; push a charge to shove it &nbsp;&#183;&nbsp; R restart &nbsp;&#183;&nbsp; P pause</div>
       <div class="tools">
         <button class="tool" id="t-haptic" aria-pressed="true" title="Vibration">VIB</button>
         <button class="tool" id="t-fx" aria-pressed="true" title="Lighting and smoke">FX</button>
@@ -185,6 +196,7 @@
   </div>
 
   <button class="drop" data-k="bomb">CHARGE</button>
+  <button class="detonate" data-k="detonate" title="Blow your placed charges now">&#9889;</button>
 
 </div>
 
@@ -907,8 +919,9 @@ function bombsUnder(e){
 /* ============================================================
    PLAYER
    ============================================================ */
-const input = { up:false, down:false, left:false, right:false, bomb:false };
+const input = { up:false, down:false, left:false, right:false, bomb:false, detonate:false };
 let bombLatch = false;
+let detonateLatch = false;
 
 function updatePlayer(dt){
   const p = G.player;
@@ -984,6 +997,8 @@ function updatePlayer(dt){
 
   if(input.bomb && !bombLatch){ bombLatch=true; dropBomb(); }
   if(!input.bomb) bombLatch=false;
+  if(input.detonate && !detonateLatch){ detonateLatch=true; detonateAll(); }
+  if(!input.detonate) detonateLatch=false;
   if(p.invuln > 0) p.invuln -= dt;
 
   // smoke inhalation
@@ -1049,6 +1064,14 @@ function dropBomb(){
                  t: p.perks.remote ? 7.5 : FUSE, range:p.range, dead:false, ticked:0,
                  slide:false, sdx:0, sdy:0 });
   Sound.place(); syncHud();
+}
+
+// Manual detonate: blow every charge you've placed right now, instead of
+// waiting out the fuse. Always available - Remote Trigger only extends how
+// long charges are willing to wait for it.
+function detonateAll(){
+  const live = G.bombs.filter(b=>!b.dead);
+  for(const b of live) detonate(b,0);
 }
 
 /* ============================================================
@@ -2042,7 +2065,7 @@ requestAnimationFrame(frame);
 const KEYMAP = {
   ArrowUp:"up", ArrowDown:"down", ArrowLeft:"left", ArrowRight:"right",
   w:"up", s:"down", a:"left", d:"right",
-  W:"up", S:"down", A:"left", D:"right", " ":"bomb"
+  W:"up", S:"down", A:"left", D:"right", " ":"bomb", e:"detonate", E:"detonate"
 };
 addEventListener("keydown", function(e){
   if(e.repeat) return;
@@ -2083,19 +2106,27 @@ Array.prototype.forEach.call(document.querySelectorAll("[data-k]"), function(nod
   const zone = document.getElementById("joyzone");
   const base = document.getElementById("joybase");
   const knob = document.getElementById("joyknob");
-  const REACH = 46, DEAD = 12;
-  let id = null, ox = 0, oy = 0;
+  const REACH = 46;
+  // Hysteresis: a direction switches on past ON, but only switches back off
+  // once the stick returns past the (smaller) OFF - a single shared DEAD
+  // threshold flickered the direction on/off with any touch jitter right at
+  // the boundary. sx/sy exponentially smooth the raw touch samples themselves
+  // (digitizer noise, not deliberate movement) before they drive anything.
+  const ON = 14, OFF = 7, SMOOTH = 0.35;
+  let id = null, ox = 0, oy = 0, sx = 0, sy = 0;
 
   function setDir(dx,dy){
-    input.right = dx >  DEAD; input.left = dx < -DEAD;
-    input.down  = dy >  DEAD; input.up   = dy < -DEAD;
+    input.right = dx >  (input.right ? OFF : ON);
+    input.left  = dx < -(input.left  ? OFF : ON);
+    input.down  = dy >  (input.down  ? OFF : ON);
+    input.up    = dy < -(input.up    ? OFF : ON);
   }
   function clearDir(){ input.up=input.down=input.left=input.right=false; }
 
   zone.addEventListener("pointerdown", function(e){
     if(id !== null) return;
     e.preventDefault();
-    id = e.pointerId; ox = e.clientX; oy = e.clientY;
+    id = e.pointerId; ox = e.clientX; oy = e.clientY; sx = 0; sy = 0;
     base.style.left = ox+"px"; base.style.top = oy+"px";
     base.classList.add("on");
     knob.style.transform = "translate(-50%,-50%)";
@@ -2104,10 +2135,11 @@ Array.prototype.forEach.call(document.querySelectorAll("[data-k]"), function(nod
   zone.addEventListener("pointermove", function(e){
     if(e.pointerId !== id) return;
     e.preventDefault();
-    let dx = e.clientX-ox, dy = e.clientY-oy;
-    const dist = Math.hypot(dx,dy), clamp = dist>REACH ? REACH/dist : 1;
-    knob.style.transform = "translate(calc(-50% + "+(dx*clamp)+"px), calc(-50% + "+(dy*clamp)+"px))";
-    setDir(dx,dy);
+    const dx = e.clientX-ox, dy = e.clientY-oy;
+    sx += (dx-sx)*SMOOTH; sy += (dy-sy)*SMOOTH;
+    const dist = Math.hypot(sx,sy), clamp = dist>REACH ? REACH/dist : 1;
+    knob.style.transform = "translate(calc(-50% + "+(sx*clamp)+"px), calc(-50% + "+(sy*clamp)+"px))";
+    setDir(sx,sy);
   });
   function release(e){
     if(e.pointerId !== id) return;
