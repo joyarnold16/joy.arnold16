@@ -55,7 +55,10 @@
   .meter.air span{background:var(--vent)}
 
   .stage{
-    position:fixed;inset:0;z-index:1;display:flex;align-items:center;justify-content:center;
+    /* top is set from JS to the hudbar's real rendered height, so the board
+       renders below the HUD instead of hidden behind it (see fitCanvas). */
+    position:fixed;top:0;left:0;right:0;bottom:0;z-index:1;
+    display:flex;align-items:center;justify-content:center;
     background:linear-gradient(180deg,#141317 0%,var(--void) 70%);
   }
   canvas{display:block;background:#0b0a0c}
@@ -133,7 +136,7 @@
 <body>
 <div class="shell">
 
-  <div class="stage">
+  <div class="stage" id="stage">
     <canvas id="cv"></canvas>
     <div id="joyzone"></div>
     <div class="joybase" id="joybase"><div class="joyknob" id="joyknob"></div></div>
@@ -154,7 +157,7 @@
     </div>
   </div>
 
-  <div class="hudbar">
+  <div class="hudbar" id="hudbar">
     <div class="bar">
       <div class="mark">Demolition Site <em>07</em></div>
       <div class="desk">move &nbsp;&#183;&nbsp; space charge &nbsp;&#183;&nbsp; push a charge to shove it &nbsp;&#183;&nbsp; R restart &nbsp;&#183;&nbsp; P pause</div>
@@ -193,11 +196,16 @@
    CONFIG
    ============================================================ */
 const COLS = 13, TILE = 40;
+// The HUD is a real fixed-height strip the board renders below (see
+// fitCanvas), not just a translucent overlay - otherwise bombs/foes in the
+// top rows render partly hidden behind it.
+const HUD_H = Math.ceil(document.getElementById("hudbar").getBoundingClientRect().height);
 // A fixed 13x11 board only fills the middle of a tall phone screen, leaving
 // big empty margins above and below. The level generator only ever refers to
 // ROWS/COLS (never a hardcoded 11 or 13), so growing the board to match the
-// device's own aspect ratio fills the screen instead of leaving it empty.
-const ROWS = Math.max(9, Math.min(31, Math.round(COLS * (innerHeight / innerWidth))));
+// device's own available area (below the HUD) fills the screen instead of
+// leaving it empty.
+const ROWS = Math.max(9, Math.min(31, Math.round(COLS * ((innerHeight - HUD_H) / innerWidth))));
 const W = COLS * TILE, H = ROWS * TILE;
 const EMPTY = 0, SOLID = 1, BRICK = 2, FLAM = 3;
 const DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
@@ -304,6 +312,7 @@ const Haptics = (function(){
    ============================================================ */
 const cv  = document.getElementById("cv");
 const ctx = cv.getContext("2d");
+const stageEl = document.getElementById("stage");
 const ov  = document.getElementById("ov");
 const ovTitle = ov.querySelector("h2");
 const ovText  = document.getElementById("ov-text");
@@ -335,9 +344,13 @@ const ui = {
 };
 
 function fitCanvas(){
-  // Letterbox the fixed W:H board into whatever the device screen gives us,
-  // instead of the old width:100%/height:auto (that only worked boxed in a column).
-  const scale = Math.min(innerWidth / W, innerHeight / H);
+  // The stage renders below the HUD strip, not underneath it, so bombs/foes
+  // in the top rows never end up hidden behind the title bar.
+  stageEl.style.top = HUD_H + "px";
+  const availH = innerHeight - HUD_H;
+  // Letterbox the fixed W:H board into whatever space that leaves, instead
+  // of the old width:100%/height:auto (that only worked boxed in a column).
+  const scale = Math.min(innerWidth / W, availH / H);
   const cw = Math.round(W * scale), ch = Math.round(H * scale);
   cv.style.width  = cw + "px";
   cv.style.height = ch + "px";
