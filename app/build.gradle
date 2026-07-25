@@ -53,6 +53,17 @@ android {
     }
 }
 
+configurations.all {
+    resolutionStrategy {
+        // AndroidX transitively pulls both kotlin-stdlib:1.8.22 and an older
+        // kotlin-stdlib-jdk7/jdk8:1.6.21, whose classes got merged into
+        // kotlin-stdlib in 1.8 - forcing a single version avoids the overlap.
+        force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+        force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+        force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+    }
+}
+
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
     // Explicit rather than relying on appcompat's transitive pull, so the
