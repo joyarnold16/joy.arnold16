@@ -192,7 +192,12 @@
 /* ============================================================
    CONFIG
    ============================================================ */
-const COLS = 13, ROWS = 11, TILE = 40;
+const COLS = 13, TILE = 40;
+// A fixed 13x11 board only fills the middle of a tall phone screen, leaving
+// big empty margins above and below. The level generator only ever refers to
+// ROWS/COLS (never a hardcoded 11 or 13), so growing the board to match the
+// device's own aspect ratio fills the screen instead of leaving it empty.
+const ROWS = Math.max(9, Math.min(31, Math.round(COLS * (innerHeight / innerWidth))));
 const W = COLS * TILE, H = ROWS * TILE;
 const EMPTY = 0, SOLID = 1, BRICK = 2, FLAM = 3;
 const DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
