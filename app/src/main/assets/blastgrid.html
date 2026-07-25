@@ -236,7 +236,11 @@ const DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
 
 const FUSE = 2.2, FIRE_LIFE = 0.44, INVULN = 1.9;
 const STEP = 1/120;
-const LEVEL_TIME = 115;      // shorter sectors: the loop should spin fast
+// 150s was tuned for the original fixed 11-row board and never scaled up
+// when ROWS started growing to fill tall phone screens (up to 31 rows) -
+// scaling by ROWS/11 keeps the same pace per tile instead of rushing players
+// on the much bigger boards most phones actually generate.
+const LEVEL_TIME = Math.round(150 * (ROWS/11));
 const COMBO_WINDOW = 1.4;
 const PLAYER_SIZE = TILE*0.64, FOE_SIZE = TILE*0.60;
 const BURN_TIME = 3.2, SPREAD_AT = 2.1;
