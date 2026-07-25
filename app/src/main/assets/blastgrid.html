@@ -367,9 +367,16 @@ function fitCanvas(){
   const cw = Math.round(W * scale), ch = Math.round(H * scale);
   cv.style.width  = cw + "px";
   cv.style.height = ch + "px";
+  // The drawing code below draws in raw world units (0..W, 0..H) through a
+  // dpr-only transform, so the BUFFER must stay at the full world size - if
+  // it were sized to the shrunk cw/ch instead (as it briefly was), anything
+  // past the buffer edge is silently clipped, not scaled down: on a typical
+  // phone that clipped off ~2-3 columns on the right, permanently invisible.
+  // CSS width/height above is what actually does the shrink-to-fit, exactly
+  // like the old width:100%/height:auto did for the original fixed board.
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  cv.width  = Math.round(cw * dpr);
-  cv.height = Math.round(ch * dpr);
+  cv.width  = Math.round(W * dpr);
+  cv.height = Math.round(H * dpr);
   ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 fitCanvas();
