@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="void_bg">#FF0E0D10</color>
+    <color name="hazard">#FFF0C246</color>
+    <color name="ic_launcher_background">#FF17150E</color>
+</resources>

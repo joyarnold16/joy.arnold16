@@ -1,0 +1,65 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.joy.blastgrid'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.joy.blastgrid"
+        // 26 keeps the launcher icon vector-only (adaptive icons land in API 26).
+        // Drop to 24 only if you add PNG mipmaps.
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            // Nothing here is reflection- or JNI-backed, so there is nothing for R8
+            // to strip incorrectly. Left off anyway: the app is one HTML asset,
+            // and shrinking buys almost nothing while risking a silent breakage.
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    packagingOptions {
+        resources {
+            excludes += ['META-INF/*.version', 'META-INF/*.kotlin_module']
+        }
+    }
+
+    // The HTML is already minified enough by hand; do not let aapt touch it.
+    androidResources {
+        noCompress 'html'
+    }
+
+    lint {
+        lintConfig file('lint.xml')
+        // A warning should never block a phone-triggered CI build.
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    // Explicit rather than relying on appcompat's transitive pull, so the
+    // WindowCompat / insets imports can't break on an appcompat bump.
+    implementation 'androidx.core:core:1.13.1'
+    implementation 'androidx.activity:activity:1.9.3'
+    // WebViewAssetLoader: serves assets over a virtual https origin so
+    // localStorage behaves, instead of the opaque origin you get with file://
+    implementation 'androidx.webkit:webkit:1.12.1'
+}

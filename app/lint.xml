@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- Vector-only adaptive icon is intentional; no raster densities are shipped. -->
+    <issue id="IconMissingDensityFolder" severity="ignore" />
+    <!-- The game is a single offline HTML asset; unused-resource scanning adds noise. -->
+    <issue id="UnusedResources" severity="ignore" />
+</lint>
