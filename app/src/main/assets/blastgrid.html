@@ -200,12 +200,24 @@ const COLS = 13, TILE = 40;
 // fitCanvas), not just a translucent overlay - otherwise bombs/foes in the
 // top rows render partly hidden behind it.
 const HUD_H = Math.ceil(document.getElementById("hudbar").getBoundingClientRect().height);
+// Same problem at the bottom: the exit tile is deliberately biased toward
+// high x+y (see buildLevel's `far` sort), i.e. the bottom-right corner,
+// which is exactly where the fixed CHARGE button (mobile) or the ".desk"
+// keyboard hint (desktop) floats - both were covering real gameplay tiles.
+// Only one of the two is ever visible; the hidden one measures 0 height.
+const dropRect = document.querySelector(".drop").getBoundingClientRect();
+const deskRect = document.querySelector(".desk").getBoundingClientRect();
+const bottomUI = Math.max(
+  dropRect.height > 0 ? innerHeight - dropRect.top : 0,
+  deskRect.height > 0 ? innerHeight - deskRect.top : 0
+);
+const CONTROLS_H = bottomUI > 0 ? Math.ceil(bottomUI) + 16 : 0;
 // A fixed 13x11 board only fills the middle of a tall phone screen, leaving
 // big empty margins above and below. The level generator only ever refers to
 // ROWS/COLS (never a hardcoded 11 or 13), so growing the board to match the
-// device's own available area (below the HUD) fills the screen instead of
-// leaving it empty.
-const ROWS = Math.max(9, Math.min(31, Math.round(COLS * ((innerHeight - HUD_H) / innerWidth))));
+// device's own available area (between the HUD and the CHARGE button) fills
+// the screen instead of leaving it empty.
+const ROWS = Math.max(9, Math.min(31, Math.round(COLS * ((innerHeight - HUD_H - CONTROLS_H) / innerWidth))));
 const W = COLS * TILE, H = ROWS * TILE;
 const EMPTY = 0, SOLID = 1, BRICK = 2, FLAM = 3;
 const DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
@@ -344,10 +356,11 @@ const ui = {
 };
 
 function fitCanvas(){
-  // The stage renders below the HUD strip, not underneath it, so bombs/foes
-  // in the top rows never end up hidden behind the title bar.
+  // The stage renders between the HUD strip and the CHARGE button, not
+  // underneath either, so bombs/foes/the exit never end up hidden behind them.
   stageEl.style.top = HUD_H + "px";
-  const availH = innerHeight - HUD_H;
+  stageEl.style.bottom = CONTROLS_H + "px";
+  const availH = innerHeight - HUD_H - CONTROLS_H;
   // Letterbox the fixed W:H board into whatever space that leaves, instead
   // of the old width:100%/height:auto (that only worked boxed in a column).
   const scale = Math.min(innerWidth / W, availH / H);
