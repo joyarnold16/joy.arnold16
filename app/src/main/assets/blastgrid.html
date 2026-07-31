@@ -476,11 +476,33 @@ function bakeColumn(){
   x.beginPath(); x.moveTo(.5,.5); x.lineTo(TILE-.5,.5); x.stroke();
   return c;
 }
-function bakeCinder(){
+// Lightens (amt>0) or darkens (amt<0) a hex color toward white/black by a
+// fraction, so bakeCinder can derive a highlight/shadow tone from whatever
+// base color it's given instead of three hand-picked hex values per brick.
+function shade(hex,amt){
+  const n = parseInt(hex.slice(1),16), mix = amt<0 ? 0 : 255, a = Math.min(1,Math.abs(amt));
+  const r = Math.round(((n>>16)&255) + (mix-((n>>16)&255))*a);
+  const g = Math.round(((n>>8)&255)  + (mix-((n>>8)&255))*a);
+  const b = Math.round((n&255)       + (mix-(n&255))*a);
+  return "#"+[r,g,b].map(v=>v.toString(16).padStart(2,"0")).join("");
+}
+// Each brick gets a random color from this palette (see buildLevel), and its
+// smoke matches when it's blown up - kept dusty/desaturated to sit inside
+// the site's grungy palette instead of clashing as neon confetti.
+const BRICK_PALETTE = [
+  { hex:"#c2503f", rgb:"194,80,63"  }, // rust red
+  { hex:"#d98a3d", rgb:"217,138,61" }, // amber orange
+  { hex:"#c9b23e", rgb:"201,178,62" }, // ochre yellow
+  { hex:"#5a9e5a", rgb:"90,158,90"  }, // moss green
+  { hex:"#4a8fae", rgb:"74,143,174" }, // steel blue
+  { hex:"#8a5ea8", rgb:"138,94,168" }  // violet
+];
+function bakeCinder(base){
+  base = base || "#736a5f";
   const c = makeCanvas(TILE,TILE), x = c.getContext("2d");
-  x.fillStyle="#736a5f"; x.fillRect(1,1,TILE-2,TILE-2);
-  x.fillStyle="#867c6f"; x.fillRect(1,1,TILE-2,TILE/2-2);
-  x.fillStyle="#5d564d"; x.fillRect(1,TILE-8,TILE-2,7);
+  x.fillStyle=base; x.fillRect(1,1,TILE-2,TILE-2);
+  x.fillStyle=shade(base,0.18); x.fillRect(1,1,TILE-2,TILE/2-2);
+  x.fillStyle=shade(base,-0.22); x.fillRect(1,TILE-8,TILE-2,7);
   speckle(x,TILE,TILE,130,["rgba(0,0,0,.14)","rgba(255,255,255,.05)","rgba(150,138,118,.12)"]);
   x.fillStyle="rgba(0,0,0,.34)";
   x.fillRect(1,TILE/2-1,TILE-2,2);
@@ -513,7 +535,8 @@ function bakeCrate(){
   return c;
 }
 const COLUMNS = [bakeColumn(),bakeColumn(),bakeColumn()];
-const CINDERS = [bakeCinder(),bakeCinder(),bakeCinder()];
+// CINDERS[colorIndex][textureVariant] - see BRICK_PALETTE and buildLevel.
+const CINDERS = BRICK_PALETTE.map(c => [bakeCinder(c.hex),bakeCinder(c.hex),bakeCinder(c.hex)]);
 const CRATES  = [bakeCrate(),bakeCrate()];
 const variant = (x,y,n) => (x*7 + y*13 + x*y) % n;
 
@@ -778,6 +801,7 @@ function buildLevel(){
   G.scorch=new Float32Array(N); G.fire=new Float32Array(N);
   G.danger=new Uint8Array(N); G.rubble=new Float32Array(N);
   G.burn=new Float32Array(N); G.burning=new Set(); G.density=new Float32Array(N);
+  G.brickColor=new Uint8Array(N);
 
   for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
     const pillar = x%2===0 && y%2===0;
@@ -793,7 +817,11 @@ function buildLevel(){
     const i = idx(x,y);
     if(G.grid[i] !== EMPTY || safe[x+","+y]) continue;
     const r = Math.random();
-    if(r < density){ G.grid[i] = BRICK; bricks.push([x,y]); }
+    if(r < density){
+      G.grid[i] = BRICK;
+      G.brickColor[i] = (Math.random()*BRICK_PALETTE.length)|0;
+      bricks.push([x,y]);
+    }
     else if(r < density + 0.09) G.grid[i] = FLAM;          // timber pallets
   }
 
@@ -1183,11 +1211,14 @@ function detonate(bomb, depth){
       const t = G.grid[idx(x,y)];
       if(t === SOLID){ damageColumn(x,y); break; }
       if(t === BRICK){
+        const brickTint = BRICK_PALETTE[G.brickColor[idx(x,y)]].rgb;
         G.grid[idx(x,y)] = EMPTY;
         G.rubble[idx(x,y)] = 1;
         G.stats.blocks++;
         addScore(SCORE.brick);
         shrapnel(x,y,["#7d736a","#645b53","#9a8d80","#3f3a35"],14,150);
+        // Smoke matches the brick that just went - the same color puffs out.
+        for(let k=0;k<6;k++) smokePuff(x,y,brickTint,0.4,2.0);
         if(G.exit.x===x && G.exit.y===y){ G.exit.open=true; Sound.reveal(); }
         else if(Math.random() < (G.player.perks.scav ? 0.52 : 0.3)) spawnDrop(x,y);
         lightCell(x,y,"tip");
@@ -1746,7 +1777,7 @@ function drawBlocks(){
         }
       }
     } else if(t===BRICK){
-      ctx.drawImage(CINDERS[variant(x,y,3)],bx,by);
+      ctx.drawImage(CINDERS[G.brickColor[i]][variant(x,y,3)],bx,by);
     } else {
       ctx.drawImage(CRATES[variant(x,y,2)],bx,by);
       if(G.burning.has(i)){
@@ -2142,10 +2173,16 @@ Array.prototype.forEach.call(document.querySelectorAll("[data-k]"), function(nod
   // Hysteresis: a direction switches on past ON, but only switches back off
   // once the stick returns past the (smaller) OFF - a single shared DEAD
   // threshold flickered the direction on/off with any touch jitter right at
-  // the boundary. sx/sy exponentially smooth the raw touch samples themselves
-  // (digitizer noise, not deliberate movement) before they drive anything.
-  const ON = 14 * UI, OFF = 7 * UI, SMOOTH = 0.35;
-  let id = null, ox = 0, oy = 0, sx = 0, sy = 0;
+  // the boundary.
+  const ON = 14 * UI, OFF = 7 * UI;
+  // tx/ty are the raw touch offset, updated instantly on every pointermove.
+  // sx/sy chase them once per animation frame instead of once per touch
+  // sample - touch sampling rate varies a lot by device (and isn't even
+  // steady on one device), so smoothing tied to raw events sped up or
+  // slowed down with it. Tying it to rAF means it's always exactly as
+  // smooth as the screen's own refresh rate, on a 60Hz phone or a 120Hz one.
+  const SMOOTH_RATE = 22; // higher = snappier follow, lower = silkier lag
+  let id = null, ox = 0, oy = 0, tx = 0, ty = 0, sx = 0, sy = 0, rafId = 0, lastT = 0;
 
   function setDir(dx,dy){
     input.right = dx >  (input.right ? OFF : ON);
@@ -2155,23 +2192,33 @@ Array.prototype.forEach.call(document.querySelectorAll("[data-k]"), function(nod
   }
   function clearDir(){ input.up=input.down=input.left=input.right=false; }
 
+  function tick(now){
+    if(id === null){ rafId = 0; return; }
+    const dt = lastT ? Math.min((now-lastT)/1000, 0.05) : 1/60;
+    lastT = now;
+    const k = 1 - Math.exp(-SMOOTH_RATE*dt);
+    sx += (tx-sx)*k; sy += (ty-sy)*k;
+    const dist = Math.hypot(sx,sy), clampF = dist>REACH ? REACH/dist : 1;
+    knob.style.transform = "translate(calc(-50% + "+(sx*clampF)+"px), calc(-50% + "+(sy*clampF)+"px))";
+    setDir(sx,sy);
+    rafId = requestAnimationFrame(tick);
+  }
+
   zone.addEventListener("pointerdown", function(e){
     if(id !== null) return;
     e.preventDefault();
-    id = e.pointerId; ox = e.clientX; oy = e.clientY; sx = 0; sy = 0;
+    id = e.pointerId; ox = e.clientX; oy = e.clientY;
+    tx = 0; ty = 0; sx = 0; sy = 0; lastT = 0;
     base.style.left = ox+"px"; base.style.top = oy+"px";
     base.classList.add("on");
     knob.style.transform = "translate(-50%,-50%)";
     Sound.wake();
+    if(!rafId) rafId = requestAnimationFrame(tick);
   });
   zone.addEventListener("pointermove", function(e){
     if(e.pointerId !== id) return;
     e.preventDefault();
-    const dx = e.clientX-ox, dy = e.clientY-oy;
-    sx += (dx-sx)*SMOOTH; sy += (dy-sy)*SMOOTH;
-    const dist = Math.hypot(sx,sy), clamp = dist>REACH ? REACH/dist : 1;
-    knob.style.transform = "translate(calc(-50% + "+(sx*clamp)+"px), calc(-50% + "+(sy*clamp)+"px))";
-    setDir(sx,sy);
+    tx = e.clientX-ox; ty = e.clientY-oy;
   });
   function release(e){
     if(e.pointerId !== id) return;
