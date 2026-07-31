@@ -1,4 +1,4 @@
-# Blastgrid
+# Bill Nanu Blastgrid
 
 A grid demolition game. One self-contained HTML file wrapped in a WebView.
 No network calls, no analytics, no external assets.
