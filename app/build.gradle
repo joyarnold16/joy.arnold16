@@ -16,14 +16,17 @@ def releaseStoreFile = file('release.keystore')
 
 android {
     namespace 'com.joy.blastgrid'
-    compileSdk 35
+    // 36 (Android 16): Play requires this for new-app submissions from
+    // Aug 31 2026 - close enough that a first submission today could easily
+    // land after the deadline once the mandatory closed-testing period runs.
+    compileSdk 36
 
     defaultConfig {
         applicationId "com.joy.blastgrid"
         // 26 keeps the launcher icon vector-only (adaptive icons land in API 26).
         // Drop to 24 only if you add PNG mipmaps.
         minSdk 26
-        targetSdk 35
+        targetSdk 36
         versionCode 1
         versionName "1.0"
     }

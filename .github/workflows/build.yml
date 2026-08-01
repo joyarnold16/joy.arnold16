@@ -25,13 +25,13 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.10.2'
+          gradle-version: '8.13'
 
       # Generate the wrapper in CI so the repo stays text-only (no committed
       # gradle-wrapper.jar), while the build itself runs through the standard
       # ./gradlew path rather than a bare 'gradle' invocation.
       - name: Generate Gradle wrapper
-        run: gradle wrapper --gradle-version 8.10.2 --no-daemon
+        run: gradle wrapper --gradle-version 8.13 --no-daemon
 
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
