@@ -35,9 +35,13 @@ android {
         release {
             if (releaseStoreFile.exists()) {
                 storeFile releaseStoreFile
-                storePassword keystoreProps.getProperty('storePassword', System.getenv('RELEASE_STORE_PASSWORD'))
-                keyAlias keystoreProps.getProperty('keyAlias', System.getenv('RELEASE_KEY_ALIAS'))
-                keyPassword keystoreProps.getProperty('keyPassword', System.getenv('RELEASE_KEY_PASSWORD'))
+                // .trim(): CI secrets pasted through a browser form easily pick up a
+                // stray trailing space/newline, which keytool then treats as part of
+                // the value and fails to match - trimming makes that class of typo
+                // harmless instead of a cryptic "no key with alias" build failure.
+                storePassword keystoreProps.getProperty('storePassword', System.getenv('RELEASE_STORE_PASSWORD'))?.trim()
+                keyAlias keystoreProps.getProperty('keyAlias', System.getenv('RELEASE_KEY_ALIAS'))?.trim()
+                keyPassword keystoreProps.getProperty('keyPassword', System.getenv('RELEASE_KEY_PASSWORD'))?.trim()
             }
         }
     }
