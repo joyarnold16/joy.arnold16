@@ -35,6 +35,17 @@ jobs:
       - name: Decode release keystore
         run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
 
+      - name: Debug signing inputs (temporary)
+        env:
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+        run: |
+          echo "RELEASE_KEY_ALIAS byte length: $(printf '%s' "$RELEASE_KEY_ALIAS" | wc -c)"
+          echo "RELEASE_KEY_ALIAS hex dump:"
+          printf '%s' "$RELEASE_KEY_ALIAS" | od -c | head -5
+          echo "Aliases actually in the keystore:"
+          keytool -list -keystore app/release.keystore -storepass "$RELEASE_STORE_PASSWORD" || true
+
       - name: Build signed release AAB
         env:
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
