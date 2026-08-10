@@ -181,7 +181,13 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    void setImmersive(boolean on) {
+    /**
+     * Named to avoid Activity.setImmersive(boolean), which already exists as a
+     * public method controlling how the system treats the activity for system
+     * dialogs - overriding it package-private does not compile, and shadowing
+     * it deliberately would be worse.
+     */
+    void setImmersiveMode(boolean on) {
         runOnUiThread(() -> {
             WindowInsetsControllerCompat c =
                     WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());

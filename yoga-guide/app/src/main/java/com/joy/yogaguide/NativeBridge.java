@@ -68,7 +68,7 @@ public class NativeBridge {
 
     @JavascriptInterface
     public void setImmersive(boolean on) {
-        activity.setImmersive(on);
+        activity.setImmersiveMode(on);
     }
 
     @JavascriptInterface

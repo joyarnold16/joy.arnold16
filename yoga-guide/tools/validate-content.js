@@ -197,6 +197,53 @@ for (const [name, fig] of Object.entries(YG.FIGURES)) {
   }
 }
 
+/* ---- android xml ---- */
+
+/*
+ * A double hyphen inside an XML comment is illegal, and aapt rejects the whole
+ * resource merge over it. Naming a CSS custom property in a comment - "matches
+ * --bg in app.css" - is the natural way to write that sentence and the natural
+ * way to break the build. Catching it here costs a millisecond; catching it in
+ * Gradle costs a twenty-second build and a CI round trip.
+ */
+const XML_ROOTS = [
+  path.join(__dirname, '..', 'app', 'src', 'main', 'res'),
+  path.join(__dirname, '..', 'app', 'src', 'main')
+];
+
+function xmlFiles(dir, out = []) {
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return out; }
+  for (const e of entries) {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) xmlFiles(full, out);
+    else if (e.name.endsWith('.xml')) out.push(full);
+  }
+  return out;
+}
+
+const seenXml = new Set();
+for (const root of XML_ROOTS) {
+  for (const file of xmlFiles(root)) {
+    if (seenXml.has(file)) continue;
+    seenXml.add(file);
+    const text = fs.readFileSync(file, 'utf8');
+    const rel = path.relative(path.join(__dirname, '..'), file);
+    const re = /<!--([\s\S]*?)-->/g;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      if (m[1].includes('--')) {
+        const line = text.slice(0, m.index).split('\n').length;
+        err(`${rel}:${line}: "--" inside an XML comment - aapt rejects this`);
+      }
+      if (m[1].endsWith('-')) {
+        const line = text.slice(0, m.index).split('\n').length;
+        err(`${rel}:${line}: XML comment ends with "-", which forms "--->"`);
+      }
+    }
+  }
+}
+
 /* ---- report ---- */
 
 console.log(`poses: ${YG.POSES.length}   figures: ${figureIds.size}   ` +
