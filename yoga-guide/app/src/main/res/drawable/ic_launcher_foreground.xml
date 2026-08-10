@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Seated figure in Sukhasana, drawn in the same line-art idiom the app uses
+     for every pose illustration. Strokes only, so the icon stays a vector and
+     the repo stays text-only (no binary mipmaps to manage from a phone). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- head -->
+    <path
+        android:pathData="M54,34 m-7.5,0 a7.5,7.5 0 1,0 15,0 a7.5,7.5 0 1,0 -15,0"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+    <!-- spine -->
+    <path
+        android:pathData="M54,43 L54,62"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+    <!-- arms resting on the knees -->
+    <path
+        android:pathData="M54,48 C46,52 38,60 34,68"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M54,48 C62,52 70,60 74,68"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+    <!-- thighs -->
+    <path
+        android:pathData="M34,68 C34,60 46,57 54,62 C62,57 74,60 74,68"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- crossed shins -->
+    <path
+        android:pathData="M38,73 C46,67 62,67 70,73"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+</vector>
