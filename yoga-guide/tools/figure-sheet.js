@@ -19,7 +19,7 @@ const OUT = path.join(__dirname, 'shots');
 (async () => {
   const browser = await chromium.launch(
     process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
-  const page = await browser.newPage({ viewport: { width: 1320, height: 900 }, deviceScaleFactor: 2 });
+  const page = await browser.newPage({ viewport: { width: 2000, height: 900 }, deviceScaleFactor: 2 });
 
   const css = fs.readFileSync(path.join(ASSETS, 'css', 'app.css'), 'utf8');
   const figure = fs.readFileSync(path.join(ASSETS, 'js', 'figure.js'), 'utf8');
@@ -32,7 +32,7 @@ const OUT = path.join(__dirname, 'shots');
      /* minmax(0,1fr): a bare 1fr floors at min-content, and an inline SVG's
         min-content is its intrinsic size - which blows some columns out and
         makes the sheet useless for comparing figures against each other. */
-     .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+     .grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:14px}
      .cell{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:6px}
      .cell .figbox{aspect-ratio:6/5}
      .cap{font-size:10px;text-align:center;color:var(--muted);margin-top:4px;

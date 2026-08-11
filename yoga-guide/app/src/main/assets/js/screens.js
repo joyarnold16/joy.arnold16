@@ -498,6 +498,8 @@
         built.adjustments.map(function (a) {
           return a.type === 'swap'
             ? '<li><strong>' + esc(a.original.name) + '</strong> → ' + esc(a.replacement.name) +
+              (a.merged ? ' <span class="muted">(added to the ' + esc(a.replacement.name) +
+                          ' already in the sequence)</span>' : '') +
               '<div class="muted tiny">' + esc(a.reason) + '</div></li>'
             : '<li><strong>' + esc(a.original ? a.original.name : 'A pose') + '</strong> removed' +
               '<div class="muted tiny">' + esc(a.reason) + '</div></li>';

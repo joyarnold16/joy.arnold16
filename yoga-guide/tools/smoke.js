@@ -52,7 +52,10 @@ async function shot(page, name) {
   // contrast bug rather than a timing one.
   await page.waitForTimeout(320);
   fs.mkdirSync(SHOTS, { recursive: true });
-  await page.screenshot({ path: path.join(SHOTS, `${String(++step).padStart(2, '0')}-${name}.png`) });
+  const prefix = process.env.YG_THEME === 'dark' ? 'dark-' : '';
+  await page.screenshot({
+    path: path.join(SHOTS, `${prefix}${String(++step).padStart(2, '0')}-${name}.png`)
+  });
 }
 
 function check(cond, message) {
@@ -66,7 +69,15 @@ function check(cond, message) {
 
   const browser = await chromium.launch(
     process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
-  const page = await browser.newPage({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2 });
+  // YG_THEME=dark exercises the dark token set. The page follows the system
+  // preference rather than carrying its own switch, so this is the only way to
+  // see that half of the stylesheet.
+  const theme = process.env.YG_THEME === 'dark' ? 'dark' : 'light';
+  const page = await browser.newPage({
+    viewport: { width: 412, height: 892 },
+    deviceScaleFactor: 2,
+    colorScheme: theme
+  });
 
   page.on('console', (m) => {
     if (m.type() === 'error') problems.push(`console error: ${m.text()}`);
@@ -194,6 +205,77 @@ function check(cond, message) {
   });
   check(advanced.length === 0,
         `no advanced pose reaches a beginner${advanced.length ? ': ' + advanced.join(', ') : ''}`);
+
+  // Substitution funnels many poses onto a few safe ones, so a filtered session
+  // can easily end up as "Cat-Cow, Cat-Cow, Cat-Cow". Checked across several
+  // profiles because the collisions differ per flag combination.
+  const repeats = await page.evaluate(() => {
+    const profiles = [
+      { flags: { pregnancy: true, hypertension: true }, level: 1, trimester: 3, length: 'medium' },
+      { flags: { pregnancy: true }, level: 2, trimester: 2, length: 'long' },
+      { flags: { disc: true, knee: true, neck: true }, level: 1, length: 'short' },
+      { flags: { hypertension: true, glaucoma: true, heart: true }, level: 2, length: 'medium' },
+      { flags: {}, level: 3, length: 'medium' }
+    ];
+    const bad = [];
+    for (const p of profiles) {
+      for (const c of YG.CONDITIONS) {
+        for (const s of c.sessions) {
+          const steps = YG.Safety.buildSession(s, p).steps;
+          for (let i = 1; i < steps.length; i++) {
+            if (steps[i].pose === steps[i - 1].pose) {
+              bad.push(`${s.id}:${steps[i].pose.id}@${i}`);
+            }
+          }
+        }
+      }
+    }
+    return bad;
+  });
+  check(repeats.length === 0,
+        `no session repeats the same pose back to back${repeats.length ? ': ' + repeats.slice(0, 6).join(', ') : ''}`);
+
+  // Merging adds time to an existing step; it must not run away. Relaxation
+  // gets a looser bound - a 12-minute Yoga Nidra on the "long" setting is the
+  // intended practice, not a runaway merge.
+  const overlong = await page.evaluate(() => {
+    const p = { flags: { pregnancy: true, hypertension: true }, level: 1, trimester: 3, length: 'long' };
+    const bad = [];
+    for (const c of YG.CONDITIONS) {
+      for (const s of c.sessions) {
+        for (const step of YG.Safety.buildSession(s, p).steps) {
+          const ceiling = step.pose.type === 'relaxation' ? 700 : 300;
+          if (step.sec > ceiling) bad.push(`${s.id}:${step.pose.id}=${step.sec}s`);
+        }
+      }
+    }
+    return bad;
+  });
+
+  // Merging must only ever lengthen a step. A cap derived from the wrong
+  // baseline would silently trim an authored duration.
+  const shortened = await page.evaluate(() => {
+    const bare = { flags: {}, level: 3, length: 'medium' };
+    const restricted = { flags: { pregnancy: true, hypertension: true }, level: 1, trimester: 3, length: 'medium' };
+    const bad = [];
+    for (const c of YG.CONDITIONS) {
+      for (const s of c.sessions) {
+        const built = YG.Safety.buildSession(s, restricted);
+        for (const step of built.steps) {
+          // Find what this pose was authored at, where it appears untouched.
+          const authored = s.steps.filter((x) => x.p === step.pose.id).map((x) => x.sec);
+          if (!step.from && authored.length && step.sec < Math.min(...authored)) {
+            bad.push(`${s.id}:${step.pose.id} ${step.sec}s < authored ${Math.min(...authored)}s`);
+          }
+        }
+      }
+    }
+    return bad;
+  });
+  check(shortened.length === 0,
+        `merging never shortens a step below its authored length${shortened.length ? ': ' + shortened.slice(0, 4).join(', ') : ''}`);
+  check(overlong.length === 0,
+        `merging never produces an absurd hold${overlong.length ? ': ' + overlong.join(', ') : ''}`);
 
   /* --------------------------------------------------------- navigation */
 

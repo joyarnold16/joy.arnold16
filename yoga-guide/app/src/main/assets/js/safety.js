@@ -111,7 +111,6 @@
       var scale = LENGTH_SCALE[profile.length] || 1;
       var steps = [];
       var adjustments = [];
-      var totalSec = 0;
 
       for (var i = 0; i < session.steps.length; i++) {
         var raw = session.steps[i];
@@ -136,6 +135,34 @@
         var floor = res.pose.type === 'relaxation' ? 60 : 15;
         if (sec < floor) sec = Math.min(floor, raw.sec);
 
+        var prev = steps.length ? steps[steps.length - 1] : null;
+        if (prev && prev.pose === res.pose) {
+          // Many poses share a substitute - in the constipation routine, Cobra,
+          // Bow and the wind-relieving pose all land on Cat-Cow for a pregnant
+          // user. Pushed as separate steps that becomes "Cat-Cow, Cat-Cow,
+          // Cat-Cow", which reads as a broken app rather than a careful one.
+          // Fold the time into the step already running instead: "hold this one
+          // a bit longer" is what a teacher would actually say. Capped, so a
+          // long run of swaps cannot produce a five-minute hold.
+          //
+          // The cap is relative to the step already there, not to the pose's
+          // default hold: sessions author their own durations (Cat-Cow runs 90s
+          // in the prenatal sequences against a 60s default), and a cap derived
+          // from the default would *shorten* a step it was supposed to extend.
+          var cap = Math.max(prev.sec, res.pose.hold) * 2;
+          prev.sec = Math.min(prev.sec + sec, cap);
+          if (res.from) {
+            adjustments.push({
+              type: 'swap',
+              original: res.from,
+              replacement: res.pose,
+              reason: res.reason,
+              merged: true
+            });
+          }
+          continue;
+        }
+
         if (res.from) {
           adjustments.push({
             type: 'swap',
@@ -146,7 +173,13 @@
         }
 
         steps.push({ pose: res.pose, sec: sec, from: res.from, reason: res.reason });
-        totalSec += res.pose.sides ? sec * 2 : sec;
+      }
+
+      // Summed at the end rather than accumulated, because merging mutates the
+      // duration of a step that was already counted.
+      var totalSec = 0;
+      for (var k = 0; k < steps.length; k++) {
+        totalSec += steps[k].pose.sides ? steps[k].sec * 2 : steps[k].sec;
       }
 
       return { steps: steps, adjustments: adjustments, totalSec: totalSec };
