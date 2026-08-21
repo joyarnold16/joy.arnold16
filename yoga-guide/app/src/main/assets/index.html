@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- viewport-fit=cover pairs with the edge-to-edge window in MainActivity; the
+     stylesheet then pads with env(safe-area-inset-*). -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="color-scheme" content="light dark">
+<title>Yoga Guide</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<div id="app">
+  <div class="screen" id="screen"></div>
+  <nav class="tabbar" id="tabs" style="display:none"></nav>
+</div>
+
+<!-- Load order matters: data and low-level services first, then the screens
+     that read them, then the bootstrap that mounts everything. Plain scripts
+     rather than modules - a WebView served over the asset-loader origin runs
+     these with no fetch, no CORS and no async ordering to get wrong. -->
+<script src="js/figure.js"></script>
+<script src="js/figures.js"></script>
+<script src="js/poses.js"></script>
+<script src="js/conditions.js"></script>
+<script src="js/store.js"></script>
+<script src="js/native.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/safety.js"></script>
+<script src="js/breath.js"></script>
+<script src="js/player.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/screens.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>
