@@ -138,6 +138,10 @@
   .stats-row i{font-style:normal;font-size:calc(10px * var(--ui));color:var(--dim);letter-spacing:.04em}
   .stats-row b{font-size:calc(12px * var(--ui));color:var(--hazard);font-weight:700}
 
+  .hint-tips{display:flex;flex-direction:column;gap:10px;max-width:44ch}
+  .hint-tips p{font-size:calc(10.5px * var(--ui));color:var(--dim);line-height:1.6;margin:0}
+  .hint-tips b{color:var(--hazard);font-weight:700}
+
   .dpad{
     position:fixed;z-index:4;
     left:calc(18px + env(safe-area-inset-left));
@@ -232,6 +236,16 @@
         <div class="stats-row"><i>Columns dropped</i><b id="cs-columns">0</b></div>
       </div>
       <button class="cta" id="stats-close">Close</button>
+    </div>
+    <div class="draft" id="hint-ov" hidden>
+      <h3>Before you start</h3>
+      <div class="sub">A few things that aren't obvious</div>
+      <div class="hint-tips">
+        <p><b>Push</b> &#8212; walk into a charge you've placed to shove it forward. Line up blasts around corners.</p>
+        <p><b>Smoke</b> &#8212; it chokes you if you linger in it. Get clear fast.</p>
+        <p><b>Detonate</b> &#8212; charges blow on their own, or hit &#9889; to set them off early.</p>
+      </div>
+      <button class="cta" id="hint-close">Got it &#8212; let's go</button>
     </div>
   </div>
 
@@ -438,6 +452,8 @@ const reviveOv   = document.getElementById("revive-ov");
 const statsOv    = document.getElementById("stats-ov");
 const statsEmpty = document.getElementById("stats-empty");
 const statsList  = document.getElementById("stats-list");
+const hintOv     = document.getElementById("hint-ov");
+let hintSeen = Store.get("hintSeen", false);
 const ui = {
   score: document.getElementById("s-score"),
   level: document.getElementById("s-level"),
@@ -952,6 +968,19 @@ function newRun(){
   buildLevel(); resetPlayer(); enterIntro();
 }
 function enterIntro(){ G.mode="intro"; G.modeT=1.05; syncHud(); }
+
+/* Shown once, the very first time a player reaches actual play - explains
+   the two mechanics that aren't obvious from the static title-screen legend
+   (pushing charges, smoke). Never shown again once dismissed. */
+function showHint(){
+  G.mode = "hint";
+  hintOv.hidden = false;
+}
+function hideHint(){
+  hintOv.hidden = true;
+  hintSeen = true; Store.set("hintSeen", true);
+  G.mode = "play"; last = performance.now(); acc = 0;
+}
 
 function nextLevel(){
   const bonus = Math.max(0, Math.round(G.timeLeft)*3);   // clear fast, get paid
@@ -2160,9 +2189,15 @@ function showCard(title,text,btn,showKeys){
    SIM + LOOP
    ============================================================ */
 function tick(dt){
-  if(G.mode==="intro"){ G.modeT-=dt; if(G.modeT<=0) G.mode="play"; return; }
+  if(G.mode==="intro"){
+    G.modeT-=dt;
+    if(G.modeT<=0){
+      if(!hintSeen && career.runs<=1) showHint(); else G.mode="play";
+    }
+    return;
+  }
   if(G.mode==="clear"){ G.modeT-=dt; if(G.modeT<=0) openDraft(); return; }
-  if(G.mode==="draft") return;
+  if(G.mode==="draft" || G.mode==="hint") return;
   if(G.mode!=="play") return;
   if(G.freeze>0){ G.freeze-=dt; return; }
 
@@ -2246,7 +2281,7 @@ addEventListener("keydown", function(e){
   if(e.key==="p"||e.key==="P") togglePause();
   if(e.key==="Enter" && (G.mode==="title"||G.mode==="over")) ovBtn.click();
   // zero-friction retry: the fastest restart is the strongest hook there is
-  if((e.key==="r"||e.key==="R") && G.mode!=="draft" && G.mode!=="revive"){
+  if((e.key==="r"||e.key==="R") && G.mode!=="draft" && G.mode!=="revive" && G.mode!=="hint"){
     if(!ov.hidden) ov.hidden = true;
     draftEl.hidden = true;
     Sound.wake(); last=0; acc=0; newRun();
@@ -2361,6 +2396,7 @@ document.getElementById("revive-watch").addEventListener("click",function(){
   else onReviveResult(false); // bridge missing (desktop/browser testing) - just end the run
 });
 document.getElementById("revive-skip").addEventListener("click",function(){ onReviveResult(false); });
+document.getElementById("hint-close").addEventListener("click", hideHint);
 ovShare.addEventListener("click",function(){
   // Native bridge first (the real Android share sheet); navigator.share()
   // as a fallback so this still does something sensible when testing the
@@ -2404,7 +2440,7 @@ ovBtn.addEventListener("click",function(){
 /* host bridge: lets a native shell (WebView, etc.) pause without faking key events */
 window.blastgrid = {
   pause: function(){ if(G.mode==="play"){ G.mode="pause"; return true; } return false; },
-  paused: function(){ return G.mode==="pause" || G.mode==="title" || G.mode==="over"; },
+  paused: function(){ return G.mode==="pause" || G.mode==="title" || G.mode==="over" || G.mode==="hint"; },
   onReviveResult: onReviveResult,
   version: "1.0"
 };
