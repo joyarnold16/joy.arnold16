@@ -25,6 +25,7 @@ import androidx.webkit.WebViewAssetLoader;
 
 import com.google.android.libraries.ads.mobile.sdk.MobileAds;
 import com.google.android.libraries.ads.mobile.sdk.common.AdRequest;
+import com.google.android.libraries.ads.mobile.sdk.common.FullScreenContentError;
 import com.google.android.libraries.ads.mobile.sdk.common.LoadAdError;
 import com.google.android.libraries.ads.mobile.sdk.common.PreloadCallback;
 import com.google.android.libraries.ads.mobile.sdk.common.PreloadConfiguration;
@@ -33,6 +34,9 @@ import com.google.android.libraries.ads.mobile.sdk.initialization.Initialization
 import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAd;
 import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAdEventCallback;
 import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAdPreloader;
+import com.google.android.libraries.ads.mobile.sdk.rewarded.RewardedAd;
+import com.google.android.libraries.ads.mobile.sdk.rewarded.RewardedAdEventCallback;
+import com.google.android.libraries.ads.mobile.sdk.rewarded.RewardedAdPreloader;
 
 /**
  * Single-activity WebView host for Blastgrid.
@@ -51,6 +55,8 @@ public class MainActivity extends AppCompatActivity {
     // Swap for the real interstitial ad unit ID from your own AdMob account
     // before shipping a build with ads to the Play Store.
     private static final String INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712";
+    // TEST ad unit ID - same deal, swap for your own before shipping ads for real.
+    private static final String REWARDED_AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917";
 
     private WebView web;
     private long lastBackPress = 0L;
@@ -181,6 +187,27 @@ public class MainActivity extends AppCompatActivity {
                             Log.d("Ads", "Interstitial pool exhausted, refilling");
                         }
                     });
+
+            AdRequest rewardedRequest = new AdRequest.Builder(REWARDED_AD_UNIT_ID).build();
+            RewardedAdPreloader.start(
+                    REWARDED_AD_UNIT_ID,
+                    new PreloadConfiguration(rewardedRequest),
+                    new PreloadCallback() {
+                        @Override
+                        public void onAdPreloaded(@NonNull String preloadId, @NonNull ResponseInfo info) {
+                            Log.d("Ads", "Rewarded ad preloaded");
+                        }
+
+                        @Override
+                        public void onAdFailedToPreload(@NonNull String preloadId, @NonNull LoadAdError error) {
+                            Log.d("Ads", "Rewarded ad failed to preload: " + error.getMessage());
+                        }
+
+                        @Override
+                        public void onAdsExhausted(@NonNull String preloadId) {
+                            Log.d("Ads", "Rewarded ad pool exhausted, refilling");
+                        }
+                    });
         }).start();
     }
 
@@ -198,6 +225,44 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
+     * Polls for a rewarded ad and shows it if one's ready. The page finds out the
+     * outcome (revive or not) via onReviveResult() on window.blastgrid, called once
+     * the ad is actually dismissed - not the moment the reward itself is granted,
+     * since a player could still back out before the ad closes on some networks.
+     */
+    private void requestRewardedRevive() {
+        RewardedAd ad = RewardedAdPreloader.pollAd(REWARDED_AD_UNIT_ID);
+        if (ad == null) {
+            notifyReviveResult(false);
+            return;
+        }
+        final boolean[] earned = {false};
+        ad.setAdEventCallback(new RewardedAdEventCallback() {
+            @Override
+            public void onAdDismissedFullScreenContent() {
+                notifyReviveResult(earned[0]);
+            }
+
+            @Override
+            public void onAdFailedToShowFullScreenContent(@NonNull FullScreenContentError error) {
+                Log.d("Ads", "Rewarded ad failed to show: " + error.getMessage());
+                notifyReviveResult(false);
+            }
+        });
+        ad.show(this, rewardItem -> earned[0] = true);
+    }
+
+    private void notifyReviveResult(boolean earned) {
+        runOnUiThread(() -> {
+            if (web == null) return;
+            web.evaluateJavascript(
+                    "window.blastgrid && window.blastgrid.onReviveResult && "
+                            + "window.blastgrid.onReviveResult(" + earned + ")",
+                    null);
+        });
+    }
+
+    /**
      * Exposed to the page as window.AdBridge. blastgrid.html decides when a run has
      * actually ended and how often to ask (see the ovBtn click handler) - this side
      * just shows an ad if one happens to be ready, on the UI thread the ad SDK needs.
@@ -206,6 +271,18 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void onRunEnd() {
             runOnUiThread(MainActivity.this::showInterstitialIfReady);
+        }
+
+        // Synchronous on purpose: the page needs this before deciding whether to
+        // even offer the revive prompt, not after.
+        @JavascriptInterface
+        public boolean isReviveAvailable() {
+            return RewardedAdPreloader.isAdAvailable(REWARDED_AD_UNIT_ID);
+        }
+
+        @JavascriptInterface
+        public void requestRevive() {
+            runOnUiThread(MainActivity.this::requestRewardedRevive);
         }
     }
 
@@ -256,6 +333,7 @@ public class MainActivity extends AppCompatActivity {
             web = null;
         }
         InterstitialAdPreloader.destroy(INTERSTITIAL_AD_UNIT_ID);
+        RewardedAdPreloader.destroy(REWARDED_AD_UNIT_ID);
         super.onDestroy();
     }
 }

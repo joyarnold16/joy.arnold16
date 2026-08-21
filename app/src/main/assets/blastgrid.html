@@ -99,6 +99,7 @@
     transition:transform .1s ease,filter .1s ease;
   }
   .cta:active{transform:scale(.96);filter:brightness(.95)}
+  .cta.ghost{background:transparent;border:1px solid var(--line);color:var(--dim)}
 
   .draft{
     position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -210,6 +211,12 @@
       <div class="sub" id="draft-sub">Pick one</div>
       <div class="cards" id="draft-cards"></div>
       <div class="held" id="draft-held"></div>
+    </div>
+    <div class="draft" id="revive-ov" hidden>
+      <h3>Crew down</h3>
+      <div class="sub">Watch a short ad to get back up with one crew?</div>
+      <button class="cta" id="revive-watch">Watch ad &amp; continue</button>
+      <button class="cta ghost" id="revive-skip">End run</button>
     </div>
     <div class="draft" id="stats-ov" hidden>
       <h3>Career</h3>
@@ -424,6 +431,7 @@ const draftHeld  = document.getElementById("draft-held");
 const draftTitle = document.getElementById("draft-title");
 const draftSub   = document.getElementById("draft-sub");
 const careerEl   = document.getElementById("career");
+const reviveOv   = document.getElementById("revive-ov");
 const statsOv    = document.getElementById("stats-ov");
 const statsEmpty = document.getElementById("stats-empty");
 const statsList  = document.getElementById("stats-list");
@@ -931,7 +939,7 @@ function resetPlayer(){
 
 function newRun(){
   career.runs++; Store.set("runs", career.runs);
-  G.level=1; G.lives=3; G.score=0;
+  G.level=1; G.lives=3; G.score=0; G.reviveUsed=false;
   G.combo=0; G.comboT=0; G.streak=0; G.clean=true;
   G.stats = blankStats(); G.taken = [];
   G.player = { x:0,y:0,w:PLAYER_SIZE,h:PLAYER_SIZE, speed:94, maxBombs:1, range:1,
@@ -1574,43 +1582,78 @@ function loseCrew(){
   G.shake = reduceMotion ? 0 : 16;
   syncHud();
   if(G.lives <= 0){
-    const s = G.stats;
-    const beat = G.score > career.best;
-    const gap = career.best - G.score;
-
-    career.best       = Math.max(career.best, G.score);
-    career.bestSector = Math.max(career.bestSector, G.level);
-    career.bestChain  = Math.max(career.bestChain, s.bestCombo);
-    career.drones    += s.drones;
-    career.blocks    += s.blocks;
-    career.columns   += s.columns;
-    Store.set("best", career.best);
-    Store.set("bestSector", career.bestSector);
-    Store.set("bestChain", career.bestChain);
-    Store.set("drones", career.drones);
-    Store.set("blocks", career.blocks);
-    Store.set("columns", career.columns);
-
-    G.mode = "over";
-    Sound.over();
-    Haptics.hit();
-    const line = beat
-      ? "New best."
-      : (gap > 0 && gap <= Math.max(200, career.best*0.12))
-        ? "Short of your best by " + gap.toLocaleString() + "."
-        : "Best so far: " + career.best.toLocaleString() + ".";
-    showCard(
-      beat ? "New site record" : "Shift over",
-      G.score.toLocaleString() + " points \u00B7 " + line + "\n" +
-      "Sector " + G.level + " \u00B7 " + s.drones + " drones \u00B7 " + s.blocks + " blocks \u00B7 " +
-      s.columns + " columns \u00B7 best chain \u00D7" + Math.max(1,s.bestCombo) +
-      (G.taken.length ? "\nKit: " + G.taken.join(", ") : ""),
-      "Run it back", false);
-    updateCareer();
+    // One offer per run, and only when the native shell actually has a
+    // rewarded ad ready - never show "watch an ad" and then have nothing to
+    // play, that's worse than just ending the run.
+    if(!G.reviveUsed && window.AdBridge && window.AdBridge.isReviveAvailable
+       && window.AdBridge.isReviveAvailable()){
+      offerRevive();
+      return;
+    }
+    finishRun();
     return;
   }
   G.bombs=[]; G.flames=[]; G.fire.fill(0);
   resetPlayer();
+}
+
+function offerRevive(){
+  G.mode = "revive";
+  reviveOv.hidden = false;
+}
+
+// Called either when the player declines the revive offer, or after
+// loseCrew() finds no rewarded ad available at all.
+function finishRun(){
+  const s = G.stats;
+  const beat = G.score > career.best;
+  const gap = career.best - G.score;
+
+  career.best       = Math.max(career.best, G.score);
+  career.bestSector = Math.max(career.bestSector, G.level);
+  career.bestChain  = Math.max(career.bestChain, s.bestCombo);
+  career.drones    += s.drones;
+  career.blocks    += s.blocks;
+  career.columns   += s.columns;
+  Store.set("best", career.best);
+  Store.set("bestSector", career.bestSector);
+  Store.set("bestChain", career.bestChain);
+  Store.set("drones", career.drones);
+  Store.set("blocks", career.blocks);
+  Store.set("columns", career.columns);
+
+  G.mode = "over";
+  Sound.over();
+  Haptics.hit();
+  const line = beat
+    ? "New best."
+    : (gap > 0 && gap <= Math.max(200, career.best*0.12))
+      ? "Short of your best by " + gap.toLocaleString() + "."
+      : "Best so far: " + career.best.toLocaleString() + ".";
+  showCard(
+    beat ? "New site record" : "Shift over",
+    G.score.toLocaleString() + " points \u00B7 " + line + "\n" +
+    "Sector " + G.level + " \u00B7 " + s.drones + " drones \u00B7 " + s.blocks + " blocks \u00B7 " +
+    s.columns + " columns \u00B7 best chain \u00D7" + Math.max(1,s.bestCombo) +
+    (G.taken.length ? "\nKit: " + G.taken.join(", ") : ""),
+    "Run it back", false);
+  updateCareer();
+}
+
+// Native calls this once the rewarded ad flow is done, one way or the other.
+// Defined on window.blastgrid (not just a bare global) so it lives alongside
+// the other native<->page bridge points instead of being a stray global.
+function onReviveResult(earned){
+  reviveOv.hidden = true;
+  if(earned){
+    G.reviveUsed = true;
+    G.lives = 1;
+    G.bombs=[]; G.flames=[]; G.fire.fill(0);
+    resetPlayer();
+    G.mode = "play"; last = 0; acc = 0;
+  } else {
+    finishRun();
+  }
 }
 
 /* ============================================================
@@ -2194,7 +2237,7 @@ addEventListener("keydown", function(e){
   if(e.key==="p"||e.key==="P") togglePause();
   if(e.key==="Enter" && (G.mode==="title"||G.mode==="over")) ovBtn.click();
   // zero-friction retry: the fastest restart is the strongest hook there is
-  if((e.key==="r"||e.key==="R") && G.mode!=="draft"){
+  if((e.key==="r"||e.key==="R") && G.mode!=="draft" && G.mode!=="revive"){
     if(!ov.hidden) ov.hidden = true;
     draftEl.hidden = true;
     Sound.wake(); last=0; acc=0; newRun();
@@ -2304,6 +2347,11 @@ ui.sound.addEventListener("click",function(){
 });
 ui.stats.addEventListener("click",showStats);
 document.getElementById("stats-close").addEventListener("click",hideStats);
+document.getElementById("revive-watch").addEventListener("click",function(){
+  if(window.AdBridge && window.AdBridge.requestRevive) window.AdBridge.requestRevive();
+  else onReviveResult(false); // bridge missing (desktop/browser testing) - just end the run
+});
+document.getElementById("revive-skip").addEventListener("click",function(){ onReviveResult(false); });
 
 /* restore saved settings and show the career line before the first tap */
 (function initSettings(){
@@ -2338,6 +2386,7 @@ ovBtn.addEventListener("click",function(){
 window.blastgrid = {
   pause: function(){ if(G.mode==="play"){ G.mode="pause"; return true; } return false; },
   paused: function(){ return G.mode==="pause" || G.mode==="title" || G.mode==="over"; },
+  onReviveResult: onReviveResult,
   version: "1.0"
 };
 
