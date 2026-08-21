@@ -3,8 +3,10 @@ package com.joy.blastgrid;
 import android.annotation.SuppressLint;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -13,6 +15,7 @@ import android.webkit.WebViewClient;
 import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.view.WindowCompat;
@@ -20,17 +23,34 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.webkit.WebViewAssetLoader;
 
+import com.google.android.libraries.ads.mobile.sdk.MobileAds;
+import com.google.android.libraries.ads.mobile.sdk.common.AdRequest;
+import com.google.android.libraries.ads.mobile.sdk.common.LoadAdError;
+import com.google.android.libraries.ads.mobile.sdk.common.PreloadCallback;
+import com.google.android.libraries.ads.mobile.sdk.common.PreloadConfiguration;
+import com.google.android.libraries.ads.mobile.sdk.common.ResponseInfo;
+import com.google.android.libraries.ads.mobile.sdk.initialization.InitializationConfig;
+import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAd;
+import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAdEventCallback;
+import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAdPreloader;
+
 /**
  * Single-activity WebView host for Blastgrid.
  *
- * The game is one self-contained HTML file in assets/. It makes no network calls,
- * so the app declares no INTERNET permission.
+ * The game is one self-contained HTML file in assets/ and still makes no network
+ * calls of its own. INTERNET/ACCESS_NETWORK_STATE are declared only for the
+ * interstitial ads shown between runs (see AdBridge below).
  */
 public class MainActivity extends AppCompatActivity {
 
     /** Served over a virtual https origin, not file://, so localStorage has a real origin. */
     private static final String GAME_URL = "https://blastgrid.local/assets/blastgrid.html";
     private static final long BACK_TO_QUIT_WINDOW_MS = 2000L;
+
+    // TEST ad unit ID - Google's public sample ID, always fills with a test ad.
+    // Swap for the real interstitial ad unit ID from your own AdMob account
+    // before shipping a build with ads to the Play Store.
+    private static final String INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712";
 
     private WebView web;
     private long lastBackPress = 0L;
@@ -51,6 +71,7 @@ public class MainActivity extends AppCompatActivity {
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         }
         hideSystemBars();
+        initAdsSdk();
 
         web = new WebView(this);
         // Matches --void in the stylesheet, so there is no white flash before first paint.
@@ -95,6 +116,10 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        // Lets the page ask for an interstitial at a natural break (end of a run)
+        // instead of the native side guessing at gameplay state from the outside.
+        web.addJavascriptInterface(new AdBridge(), "AdBridge");
+
         setContentView(web);
         web.loadUrl(GAME_URL);
 
@@ -120,6 +145,68 @@ public class MainActivity extends AppCompatActivity {
                         });
             }
         });
+    }
+
+    /**
+     * Initializes the GMA Next-Gen SDK and starts preloading an interstitial so one
+     * is ready by the time the player finishes a run. Init must happen off the UI
+     * thread or it can ANR; preloading keeps a fresh ad on hand without a per-show
+     * load delay, since InterstitialAdPreloader automatically fetches a replacement
+     * each time pollAd() hands one out.
+     */
+    private void initAdsSdk() {
+        new Thread(() -> {
+            MobileAds.initialize(
+                    this,
+                    new InitializationConfig.Builder(getString(R.string.admob_app_id)).build(),
+                    status -> Log.d("Ads", "Mobile Ads SDK initialized"));
+
+            AdRequest adRequest = new AdRequest.Builder(INTERSTITIAL_AD_UNIT_ID).build();
+            InterstitialAdPreloader.start(
+                    INTERSTITIAL_AD_UNIT_ID,
+                    new PreloadConfiguration(adRequest),
+                    new PreloadCallback() {
+                        @Override
+                        public void onAdPreloaded(@NonNull String preloadId, @NonNull ResponseInfo info) {
+                            Log.d("Ads", "Interstitial preloaded");
+                        }
+
+                        @Override
+                        public void onAdFailedToPreload(@NonNull String preloadId, @NonNull LoadAdError error) {
+                            Log.d("Ads", "Interstitial failed to preload: " + error.getMessage());
+                        }
+
+                        @Override
+                        public void onAdsExhausted(@NonNull String preloadId) {
+                            Log.d("Ads", "Interstitial pool exhausted, refilling");
+                        }
+                    });
+        }).start();
+    }
+
+    /** Shows a preloaded interstitial if one is ready; silently no-ops otherwise. */
+    private void showInterstitialIfReady() {
+        InterstitialAd ad = InterstitialAdPreloader.pollAd(INTERSTITIAL_AD_UNIT_ID);
+        if (ad == null) return; // no ad yet (offline, still loading, etc.) - never block the retry
+        ad.setAdEventCallback(new InterstitialAdEventCallback() {
+            @Override
+            public void onAdImpression() {
+                Log.d("Ads", "Interstitial impression recorded");
+            }
+        });
+        ad.show(this);
+    }
+
+    /**
+     * Exposed to the page as window.AdBridge. blastgrid.html decides when a run has
+     * actually ended and how often to ask (see the ovBtn click handler) - this side
+     * just shows an ad if one happens to be ready, on the UI thread the ad SDK needs.
+     */
+    private class AdBridge {
+        @JavascriptInterface
+        public void onRunEnd() {
+            runOnUiThread(MainActivity.this::showInterstitialIfReady);
+        }
     }
 
     private void hideSystemBars() {
@@ -168,6 +255,7 @@ public class MainActivity extends AppCompatActivity {
             web.destroy();
             web = null;
         }
+        InterstitialAdPreloader.destroy(INTERSTITIAL_AD_UNIT_ID);
         super.onDestroy();
     }
 }

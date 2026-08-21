@@ -2273,7 +2273,17 @@ ui.sound.addEventListener("click",function(){
   }
   updateCareer();
 })();
+/* Ask the native shell for an interstitial every few retries - not on the very
+   first "Begin shift" tap, and not every single retry, since an ad on every
+   death is the fastest way to make players quit instead of trying again. */
+let retryCount = 0;
 ovBtn.addEventListener("click",function(){
+  if(G.mode === "over"){
+    retryCount++;
+    if(retryCount % 3 === 0 && window.AdBridge && window.AdBridge.onRunEnd){
+      try { window.AdBridge.onRunEnd(); } catch(e){}
+    }
+  }
   Sound.wake(); ov.hidden=true; last=0; acc=0; newRun();
 });
 /* host bridge: lets a native shell (WebView, etc.) pause without faking key events */

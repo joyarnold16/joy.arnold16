@@ -1,7 +1,9 @@
 # Nanu Blastgrid
 
 A grid demolition game. One self-contained HTML file wrapped in a WebView.
-No network calls, no analytics, no external assets.
+No analytics, no external assets. The only network traffic is Google's ad SDK
+requesting interstitials between runs (see "Ads" below) - the game itself still
+makes no calls of its own.
 
 ## Layout
 
@@ -44,3 +46,17 @@ Produces an AAB for Play. You will need a signing config and Play App Signing.
 
 Back once pauses the run via `window.blastgrid.pause()`. Back twice within two
 seconds quits.
+
+## Ads
+
+GMA Next-Gen SDK (`ads-mobile-sdk`), not the legacy `play-services-ads` -
+Google put that one in maintenance mode in mid-2026. `MainActivity` preloads
+one interstitial ad unit; `blastgrid.html`'s retry button asks for it via
+`window.AdBridge.onRunEnd()` every third retry (never on the very first
+"Begin shift" tap, and never blocking the retry if no ad is ready).
+
+`@string/admob_app_id` and `INTERSTITIAL_AD_UNIT_ID` in `MainActivity.java`
+are both currently Google's public **test** IDs - swap both for the real ones
+from your own AdMob account before shipping a build with ads to Play. Also
+still needed before that release: a GDPR/UK consent flow (Google's UMP SDK)
+if the app serves ads in the EEA/UK, which isn't implemented yet.

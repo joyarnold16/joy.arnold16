@@ -106,4 +106,8 @@ dependencies {
     // WebViewAssetLoader: serves assets over a virtual https origin so
     // localStorage behaves, instead of the opaque origin you get with file://
     implementation 'androidx.webkit:webkit:1.12.1'
+    // GMA Next-Gen SDK for interstitial ads between runs. Deliberately the
+    // Next-Gen artifact, not the legacy com.google.android.gms:play-services-ads -
+    // Google put that one in maintenance mode in favor of this as of mid-2026.
+    implementation 'com.google.android.libraries.ads.mobile.sdk:ads-mobile-sdk:1.4.0'
 }

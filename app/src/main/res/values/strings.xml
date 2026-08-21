@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Nanu Blastgrid</string>
+    <!-- TEST ID - Google's public sample App ID. Replace with your real AdMob App
+         ID (from admob.google.com, once you've registered this app there) before
+         shipping a build with ads to the Play Store - test ads only fill with this
+         one. This same value is also read from MainActivity for SDK init, so it
+         only needs updating in this one place. -->
+    <string name="admob_app_id" translatable="false">ca-app-pub-3940256099942544~3347511713</string>
 </resources>
