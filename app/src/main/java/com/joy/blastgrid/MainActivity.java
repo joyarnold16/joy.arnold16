@@ -1,6 +1,7 @@
 package com.joy.blastgrid;
 
 import android.annotation.SuppressLint;
+import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
@@ -125,6 +126,7 @@ public class MainActivity extends AppCompatActivity {
         // Lets the page ask for an interstitial at a natural break (end of a run)
         // instead of the native side guessing at gameplay state from the outside.
         web.addJavascriptInterface(new AdBridge(), "AdBridge");
+        web.addJavascriptInterface(new ShareBridge(), "ShareBridge");
 
         setContentView(web);
         web.loadUrl(GAME_URL);
@@ -283,6 +285,19 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void requestRevive() {
             runOnUiThread(MainActivity.this::requestRewardedRevive);
+        }
+    }
+
+    /** Exposed to the page as window.ShareBridge, for the "Share score" button. */
+    private class ShareBridge {
+        @JavascriptInterface
+        public void share(String text) {
+            runOnUiThread(() -> {
+                Intent send = new Intent(Intent.ACTION_SEND);
+                send.setType("text/plain");
+                send.putExtra(Intent.EXTRA_TEXT, text);
+                startActivity(Intent.createChooser(send, null));
+            });
         }
     }
 

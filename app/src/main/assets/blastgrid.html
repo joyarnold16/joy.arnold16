@@ -205,6 +205,7 @@
       </div>
       <div class="career" id="career"></div>
       <button class="cta" id="ov-btn">Begin shift</button>
+      <button class="cta ghost" id="ov-share" hidden>Share score</button>
     </div>
     <div class="draft" id="draft" hidden>
       <h3 id="draft-title">Sector cleared &#183; requisition</h3>
@@ -425,6 +426,8 @@ const ovTitle = ov.querySelector("h2");
 const ovText  = document.getElementById("ov-text");
 const ovKeys  = document.getElementById("ov-keys");
 const ovBtn   = document.getElementById("ov-btn");
+const ovShare = document.getElementById("ov-share");
+let lastRunShareText = "";
 const draftEl    = document.getElementById("draft");
 const draftCards = document.getElementById("draft-cards");
 const draftHeld  = document.getElementById("draft-held");
@@ -1637,6 +1640,12 @@ function finishRun(){
     s.columns + " columns \u00B7 best chain \u00D7" + Math.max(1,s.bestCombo) +
     (G.taken.length ? "\nKit: " + G.taken.join(", ") : ""),
     "Run it back", false);
+
+  lastRunShareText =
+    "I just scored " + G.score.toLocaleString() + " points and reached Sector " +
+    G.level + " in Nanu Blastgrid. Can you beat that?\n" +
+    "https://play.google.com/store/apps/details?id=com.joy.blastgrid";
+  ovShare.hidden = false;
   updateCareer();
 }
 
@@ -2352,6 +2361,16 @@ document.getElementById("revive-watch").addEventListener("click",function(){
   else onReviveResult(false); // bridge missing (desktop/browser testing) - just end the run
 });
 document.getElementById("revive-skip").addEventListener("click",function(){ onReviveResult(false); });
+ovShare.addEventListener("click",function(){
+  // Native bridge first (the real Android share sheet); navigator.share()
+  // as a fallback so this still does something sensible when testing the
+  // page directly in a browser, where there's no ShareBridge at all.
+  if(window.ShareBridge && window.ShareBridge.share){
+    window.ShareBridge.share(lastRunShareText);
+  } else if(navigator.share){
+    navigator.share({ text: lastRunShareText }).catch(function(){});
+  }
+});
 
 /* restore saved settings and show the career line before the first tap */
 (function initSettings(){
