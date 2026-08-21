@@ -909,6 +909,7 @@ function buildLevel(){
   }
 
   G.bombs=[]; G.flames=[]; G.drops=[]; G.foes=[]; G.bits=[]; G.smoke=[]; G.pops=[]; G.lights=[]; G.decals=[];
+  G.dropSpawned = false;   // only one reward pickup allowed per sector
 
   if(bricks.length){
     const far = bricks.slice().sort((a,b)=>(b[0]+b[1])-(a[0]+a[1]));
@@ -1381,6 +1382,8 @@ function lightCell(x,y,kind){
 }
 
 function spawnDrop(x,y){
+  if(G.dropSpawned) return;   // one reward per sector, not one per brick
+  G.dropSpawned = true;
   const r = Math.random();
   G.drops.push({ cx:x, cy:y, type: r<0.36?"fire" : r<0.68?"bomb" : r<0.85?"speed" : "aid" });
 }
