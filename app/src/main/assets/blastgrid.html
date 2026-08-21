@@ -126,6 +126,17 @@
     border:1px solid var(--line);border-radius:3px;padding:2px 5px;
   }
 
+  .stats-list{
+    display:flex;flex-direction:column;gap:1px;width:100%;max-width:calc(280px * var(--ui));
+    border:1px solid var(--line);border-radius:5px;overflow:hidden;
+  }
+  .stats-row{
+    display:flex;justify-content:space-between;align-items:center;
+    background:var(--panel);padding:calc(8px * var(--ui)) calc(12px * var(--ui));
+  }
+  .stats-row i{font-style:normal;font-size:calc(10px * var(--ui));color:var(--dim);letter-spacing:.04em}
+  .stats-row b{font-size:calc(12px * var(--ui));color:var(--hazard);font-weight:700}
+
   .dpad{
     position:fixed;z-index:4;
     left:calc(18px + env(safe-area-inset-left));
@@ -200,6 +211,20 @@
       <div class="cards" id="draft-cards"></div>
       <div class="held" id="draft-held"></div>
     </div>
+    <div class="draft" id="stats-ov" hidden>
+      <h3>Career</h3>
+      <div class="sub" id="stats-empty" hidden>No runs recorded yet</div>
+      <div class="stats-list" id="stats-list">
+        <div class="stats-row"><i>Best score</i><b id="cs-best">0</b></div>
+        <div class="stats-row"><i>Best sector reached</i><b id="cs-sector">0</b></div>
+        <div class="stats-row"><i>Best chain</i><b id="cs-chain">&times;1</b></div>
+        <div class="stats-row"><i>Runs played</i><b id="cs-runs">0</b></div>
+        <div class="stats-row"><i>Drones destroyed</i><b id="cs-drones">0</b></div>
+        <div class="stats-row"><i>Blocks destroyed</i><b id="cs-blocks">0</b></div>
+        <div class="stats-row"><i>Columns dropped</i><b id="cs-columns">0</b></div>
+      </div>
+      <button class="cta" id="stats-close">Close</button>
+    </div>
   </div>
 
   <div class="hudbar" id="hudbar">
@@ -210,6 +235,7 @@
         <button class="tool" id="t-haptic" aria-pressed="true" title="Vibration">VIB</button>
         <button class="tool" id="t-fx" aria-pressed="true" title="Lighting and smoke">FX</button>
         <button class="tool" id="t-sound" aria-pressed="true" title="Sound">&#9835;</button>
+        <button class="tool" id="t-stats" title="Career stats">STAT</button>
         <button class="tool" id="t-pause" title="Pause">&#10073;&#10073;</button>
       </div>
     </div>
@@ -398,6 +424,9 @@ const draftHeld  = document.getElementById("draft-held");
 const draftTitle = document.getElementById("draft-title");
 const draftSub   = document.getElementById("draft-sub");
 const careerEl   = document.getElementById("career");
+const statsOv    = document.getElementById("stats-ov");
+const statsEmpty = document.getElementById("stats-empty");
+const statsList  = document.getElementById("stats-list");
 const ui = {
   score: document.getElementById("s-score"),
   level: document.getElementById("s-level"),
@@ -414,6 +443,7 @@ const ui = {
   sound: document.getElementById("t-sound"),
   fx:    document.getElementById("t-fx"),
   haptic: document.getElementById("t-haptic"),
+  stats: document.getElementById("t-stats"),
   pause: document.getElementById("t-pause")
 };
 
@@ -2226,6 +2256,31 @@ function togglePause(){
   if(G.mode==="play") G.mode="pause";
   else if(G.mode==="pause"){ G.mode="play"; last=performance.now(); acc=0; }
 }
+
+// Whether opening the stats screen paused a run that was actually in
+// progress, so closing it only resumes play when that's genuinely what
+// was interrupted (not when opened from the title screen, mid-pause, etc).
+let statsResumedRun = false;
+function showStats(){
+  if(G.mode==="play"){ G.mode="pause"; statsResumedRun = true; }
+  const has = career.runs > 0 || career.best > 0;
+  statsEmpty.hidden = has;
+  statsList.hidden = !has;
+  if(has){
+    document.getElementById("cs-best").textContent = career.best.toLocaleString();
+    document.getElementById("cs-sector").textContent = career.bestSector;
+    document.getElementById("cs-chain").textContent = "×" + Math.max(1,career.bestChain);
+    document.getElementById("cs-runs").textContent = career.runs.toLocaleString();
+    document.getElementById("cs-drones").textContent = career.drones.toLocaleString();
+    document.getElementById("cs-blocks").textContent = career.blocks.toLocaleString();
+    document.getElementById("cs-columns").textContent = career.columns.toLocaleString();
+  }
+  statsOv.hidden = false;
+}
+function hideStats(){
+  statsOv.hidden = true;
+  if(statsResumedRun){ G.mode="play"; last=performance.now(); acc=0; statsResumedRun = false; }
+}
 function setFx(v,save){
   G.fx=v;
   ui.fx.setAttribute("aria-pressed",String(v));
@@ -2247,6 +2302,8 @@ ui.sound.addEventListener("click",function(){
   ui.sound.innerHTML = on?"&#9835;":"&#9834;";
   ui.sound.style.opacity = on?"1":".5";
 });
+ui.stats.addEventListener("click",showStats);
+document.getElementById("stats-close").addEventListener("click",hideStats);
 
 /* restore saved settings and show the career line before the first tap */
 (function initSettings(){
