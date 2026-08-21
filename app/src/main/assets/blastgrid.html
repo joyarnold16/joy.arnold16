@@ -854,7 +854,7 @@ const G = {
   level:1, lives:3, score:0, best:0,
   timeLeft:LEVEL_TIME, panic:false,
   shake:0, freeze:0, flash:0, modeT:0, clearStats:null,
-  fx:true, slowFrames:0, dustT:0, crackleT:0,
+  fx:true, dustT:0, crackleT:0,
   combo:0, comboT:0, comboFlash:0, clean:true, streak:0,
   stats:null, taken:[]
 };
@@ -890,10 +890,11 @@ function buildLevel(){
   }
 
   const safe = { "1,1":1,"2,1":1,"1,2":1,"3,1":1,"1,3":1 };
-  // Ramps from an easy, walkable sector 1 up to the same eventual max as before
-  // (0.56) but over ~75 sectors instead of ~11 - the old +0.013/level basically
-  // maxed difficulty out before a new player had a chance to get hooked.
-  const density = clamp(0.30 + G.level*0.0035, 0.30, 0.56);
+  // Ramps from an open, walkable sector 1 up to the same eventual max as
+  // before (0.56) but over ~75 sectors - a 0.30 starting density still read
+  // as "wall to wall bricks" to new players, so sector 1 now opens much
+  // sparser and the pallet band is thinner too (less total clutter early on).
+  const density = clamp(0.16 + G.level*0.0053, 0.16, 0.56);
   const bricks = [];
   for(let y=1;y<ROWS-1;y++) for(let x=1;x<COLS-1;x++){
     const i = idx(x,y);
@@ -904,7 +905,7 @@ function buildLevel(){
       G.brickColor[i] = (Math.random()*BRICK_PALETTE.length)|0;
       bricks.push([x,y]);
     }
-    else if(r < density + 0.09) G.grid[i] = FLAM;          // timber pallets
+    else if(r < density + 0.06) G.grid[i] = FLAM;          // timber pallets
   }
 
   G.bombs=[]; G.flames=[]; G.drops=[]; G.foes=[]; G.bits=[]; G.smoke=[]; G.pops=[]; G.lights=[]; G.decals=[];
@@ -1284,9 +1285,9 @@ function damageColumn(x,y){
     Haptics.collapse();
     G.shake = reduceMotion ? 0 : 18;
     pop(x*TILE+TILE/2, y*TILE+TILE/2, "COLUMN DOWN", "#c8c2b6");
-    shrapnel(x,y,["#6d6961","#54514c","#8a6a48","#3c3934"], 26, 210);
+    shrapnel(x,y,["#6d6961","#54514c","#8a6a48","#3c3934"], 16, 210);
     // the collapse itself throws dust and shoves anything close
-    for(let k=0;k<10;k++) smokePuff(x,y,"170,162,148",0.34,2.0);
+    for(let k=0;k<6;k++) smokePuff(x,y,"170,162,148",0.34,2.0);
     blastPush(x*TILE+TILE/2, y*TILE+TILE/2, 200, TILE*2.4);
     addLight(x*TILE+TILE/2, y*TILE+TILE/2, 90, 0.5, 0.4, "warm");
   }
@@ -1317,9 +1318,9 @@ function detonate(bomb, depth){
         G.rubble[idx(x,y)] = 1;
         G.stats.blocks++;
         addScore(SCORE.brick);
-        shrapnel(x,y,["#7d736a","#645b53","#9a8d80","#3f3a35"],14,150);
+        shrapnel(x,y,["#7d736a","#645b53","#9a8d80","#3f3a35"],8,150);
         // Smoke matches the brick that just went - the same color puffs out.
-        for(let k=0;k<6;k++) smokePuff(x,y,brickTint,0.4,2.0);
+        for(let k=0;k<4;k++) smokePuff(x,y,brickTint,0.4,2.0);
         if(G.exit.x===x && G.exit.y===y){ G.exit.open=true; Sound.reveal(); }
         else if(Math.random() < (G.player.perks.scav ? 0.52 : 0.3)) spawnDrop(x,y);
         lightCell(x,y,"tip");
@@ -1698,7 +1699,7 @@ function onReviveResult(earned){
    PARTICLES
    ============================================================ */
 function shrapnel(cx,cy,colors,count,power){
-  if(reduceMotion || !G.fx || G.bits.length > 400) return;
+  if(reduceMotion || !G.fx || G.bits.length > 260) return;
   for(let i=0;i<count;i++){
     const a=Math.random()*Math.PI*2, sp=power*(0.25+Math.random()*0.75);
     G.bits.push({
@@ -1713,7 +1714,7 @@ function shrapnel(cx,cy,colors,count,power){
   }
 }
 function smokePuff(cx,cy,tint,alpha,life){
-  if(!G.fx || reduceMotion || G.smoke.length > 300) return;
+  if(!G.fx || reduceMotion || G.smoke.length > 200) return;
   G.smoke.push({
     x:cx*TILE+TILE/2+(Math.random()-.5)*24, y:cy*TILE+TILE/2+(Math.random()-.5)*24,
     vx:(Math.random()-.5)*18, vy:(Math.random()-.5)*18-5,
@@ -2227,9 +2228,6 @@ function frame(now){
   if(!last) last=now;
   let dt=(now-last)/1000; last=now;
   if(dt>0.25) dt=0.25;
-
-  if(G.fx && dt>0.034){ if(++G.slowFrames>90){ setFx(false,false); G.slowFrames=0; } }
-  else if(G.slowFrames>0) G.slowFrames--;
 
   if(G.mode!=="title" && G.mode!=="over"){
     acc+=dt;
