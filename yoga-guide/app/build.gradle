@@ -1,0 +1,107 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Release signing reads from app/release.keystore + keystore.properties, both
+// git-ignored - never commit the actual keystore or passwords to this public
+// repo. Locally: drop release.keystore here and a keystore.properties (see
+// keystore.properties.example) at the repo root. In CI: the release workflow
+// decodes a base64 secret into release.keystore and passes the rest as env vars.
+def keystorePropsFile = rootProject.file('keystore.properties')
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+def releaseStoreFile = file('release.keystore')
+
+android {
+    namespace 'com.joy.yogaguide'
+    // 36 (Android 16): Play requires this for new-app submissions from
+    // Aug 31 2026.
+    compileSdk 36
+
+    defaultConfig {
+        applicationId "com.joy.yogaguide"
+        // 26 keeps the launcher icon vector-only (adaptive icons land in API 26).
+        minSdk 26
+        targetSdk 36
+        versionCode 1
+        versionName "1.0"
+    }
+
+    signingConfigs {
+        release {
+            if (releaseStoreFile.exists()) {
+                storeFile releaseStoreFile
+                // .trim(): CI secrets pasted through a browser form easily pick up a
+                // stray trailing space/newline, which keytool then treats as part of
+                // the value and fails to match.
+                storePassword keystoreProps.getProperty('storePassword', System.getenv('RELEASE_STORE_PASSWORD'))?.trim()
+                keyAlias keystoreProps.getProperty('keyAlias', System.getenv('RELEASE_KEY_ALIAS'))?.trim()
+                keyPassword keystoreProps.getProperty('keyPassword', System.getenv('RELEASE_KEY_PASSWORD'))?.trim()
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // Unsigned (and un-uploadable to Play) until release.keystore is
+            // supplied - see the comment above signingConfigs.
+            if (releaseStoreFile.exists()) signingConfig signingConfigs.release
+            // WorkManager and the @JavascriptInterface bridge are both
+            // reflection-reached, so R8 would need keep rules to be safe. The
+            // payload is HTML/JS either way, so shrinking buys almost nothing.
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    packagingOptions {
+        resources {
+            excludes += ['META-INF/*.version', 'META-INF/*.kotlin_module']
+        }
+    }
+
+    // The web payload is already hand-minified; do not let aapt re-encode it.
+    androidResources {
+        noCompress 'html'
+    }
+
+    lint {
+        lintConfig file('lint.xml')
+        // A warning should never block a phone-triggered CI build.
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
+
+configurations.all {
+    resolutionStrategy {
+        // AndroidX transitively pulls several kotlin-stdlib lines whose classes
+        // got merged in 1.8 - force one version to avoid the class overlap.
+        force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+        force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+        force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.core:core:1.13.1'
+    implementation 'androidx.activity:activity:1.9.3'
+    // WebViewAssetLoader: serves assets over a virtual https origin so
+    // localStorage behaves, instead of the opaque origin you get with file://
+    implementation 'androidx.webkit:webkit:1.12.1'
+    // Daily practice reminder. AlarmManager alone loses the schedule across a
+    // reboot unless you also register a BOOT_COMPLETED receiver; WorkManager
+    // persists it for us.
+    implementation 'androidx.work:work-runtime:2.9.1'
+}

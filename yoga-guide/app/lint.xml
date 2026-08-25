@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- The app ships no translations yet; the store listing is English-only. -->
+    <issue id="MissingTranslation" severity="ignore" />
+    <!-- Vector-only launcher icon is deliberate (minSdk 26). -->
+    <issue id="IconMissingDensityFolder" severity="ignore" />
+</lint>
