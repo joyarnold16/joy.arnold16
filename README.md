@@ -55,8 +55,10 @@ one interstitial ad unit; `blastgrid.html`'s retry button asks for it via
 `window.AdBridge.onRunEnd()` every third retry (never on the very first
 "Begin shift" tap, and never blocking the retry if no ad is ready).
 
-`@string/admob_app_id` and `INTERSTITIAL_AD_UNIT_ID` in `MainActivity.java`
-are both currently Google's public **test** IDs - swap both for the real ones
-from your own AdMob account before shipping a build with ads to Play. Also
-still needed before that release: a GDPR/UK consent flow (Google's UMP SDK)
-if the app serves ads in the EEA/UK, which isn't implemented yet.
+`@string/admob_app_id`, `INTERSTITIAL_AD_UNIT_ID` and `REWARDED_AD_UNIT_ID`
+hold this app's real AdMob IDs as of v1.2.
+
+Still outstanding: a GDPR/UK consent flow (Google's UMP SDK) - the app ships
+ads to the EEA/UK without one, which isn't compliant. Play Console's App
+content -> Ads declaration also needs to say the app contains ads, so the
+store listing carries the "Contains ads" badge.

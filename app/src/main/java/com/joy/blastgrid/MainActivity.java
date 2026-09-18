@@ -52,12 +52,8 @@ public class MainActivity extends AppCompatActivity {
     private static final String GAME_URL = "https://blastgrid.local/assets/blastgrid.html";
     private static final long BACK_TO_QUIT_WINDOW_MS = 2000L;
 
-    // TEST ad unit ID - Google's public sample ID, always fills with a test ad.
-    // Swap for the real interstitial ad unit ID from your own AdMob account
-    // before shipping a build with ads to the Play Store.
-    private static final String INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712";
-    // TEST ad unit ID - same deal, swap for your own before shipping ads for real.
-    private static final String REWARDED_AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917";
+    private static final String INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-1719692893910129/3847453039";
+    private static final String REWARDED_AD_UNIT_ID = "ca-app-pub-1719692893910129/4613292689";
 
     private WebView web;
     private long lastBackPress = 0L;
