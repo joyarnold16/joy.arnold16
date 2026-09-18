@@ -58,7 +58,9 @@ one interstitial ad unit; `blastgrid.html`'s retry button asks for it via
 `@string/admob_app_id`, `INTERSTITIAL_AD_UNIT_ID` and `REWARDED_AD_UNIT_ID`
 hold this app's real AdMob IDs as of v1.2.
 
-Still outstanding: a GDPR/UK consent flow (Google's UMP SDK) - the app ships
-ads to the EEA/UK without one, which isn't compliant. Play Console's App
-content -> Ads declaration also needs to say the app contains ads, so the
-store listing carries the "Contains ads" badge.
+GDPR/UK consent runs through Google's UMP SDK before any ad is requested
+(`gatherConsentThenInitAds`). UMP decides per-region whether a form is needed,
+so players outside the EEA/UK never see a prompt. If consent is declined,
+`canRequestAds()` stays false, the preloaders never start, and the game runs
+ad-free - `isReviveAvailable()` reports false so the revive prompt is never
+offered.

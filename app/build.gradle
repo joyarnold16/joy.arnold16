@@ -27,8 +27,8 @@ android {
         // Drop to 24 only if you add PNG mipmaps.
         minSdk 26
         targetSdk 36
-        versionCode 3
-        versionName "1.2"
+        versionCode 4
+        versionName "1.3"
     }
 
     signingConfigs {
@@ -110,4 +110,8 @@ dependencies {
     // Next-Gen artifact, not the legacy com.google.android.gms:play-services-ads -
     // Google put that one in maintenance mode in favor of this as of mid-2026.
     implementation 'com.google.android.libraries.ads.mobile.sdk:ads-mobile-sdk:1.4.0'
+    // User Messaging Platform: gathers GDPR/UK consent before any ad request.
+    // Ships separately from the ads SDK; required because the app serves ads
+    // in the EEA and UK.
+    implementation 'com.google.android.ump:user-messaging-platform:4.0.0'
 }

@@ -38,6 +38,11 @@ import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAdPr
 import com.google.android.libraries.ads.mobile.sdk.rewarded.RewardedAd;
 import com.google.android.libraries.ads.mobile.sdk.rewarded.RewardedAdEventCallback;
 import com.google.android.libraries.ads.mobile.sdk.rewarded.RewardedAdPreloader;
+import com.google.android.ump.ConsentInformation;
+import com.google.android.ump.ConsentRequestParameters;
+import com.google.android.ump.UserMessagingPlatform;
+
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Single-activity WebView host for Blastgrid.
@@ -45,6 +50,9 @@ import com.google.android.libraries.ads.mobile.sdk.rewarded.RewardedAdPreloader;
  * The game is one self-contained HTML file in assets/ and still makes no network
  * calls of its own. INTERNET/ACCESS_NETWORK_STATE are declared only for the
  * interstitial ads shown between runs (see AdBridge below).
+ *
+ * Ads are gated behind UMP consent - nothing is requested until the user's GDPR/UK
+ * choice is known, and the game runs ad-free if consent is declined.
  */
 public class MainActivity extends AppCompatActivity {
 
@@ -57,6 +65,8 @@ public class MainActivity extends AppCompatActivity {
 
     private WebView web;
     private long lastBackPress = 0L;
+    /** MobileAds.initialize() must run exactly once, whichever consent path gets there first. */
+    private final AtomicBoolean adsStarted = new AtomicBoolean(false);
 
     @SuppressLint({"SetJavaScriptEnabled", "ClickableViewAccessibility"})
     @Override
@@ -74,7 +84,7 @@ public class MainActivity extends AppCompatActivity {
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         }
         hideSystemBars();
-        initAdsSdk();
+        gatherConsentThenInitAds();
 
         web = new WebView(this);
         // Matches --void in the stylesheet, so there is no white flash before first paint.
@@ -152,11 +162,59 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
+     * Gathers GDPR/UK consent before any ad is requested, then starts the ads SDK.
+     *
+     * UMP decides whether a form is actually needed based on the user's region, so
+     * players outside the EEA/UK never see a prompt - requestConsentInfoUpdate comes
+     * back with nothing to show and canRequestAds() is already true. It runs on every
+     * launch because consent can expire or be withdrawn, and it's cheap when there's
+     * nothing to do. Ads only start once consent allows it; if the user declines,
+     * canRequestAds() stays false and the game simply runs ad-free.
+     */
+    private void gatherConsentThenInitAds() {
+        ConsentInformation consentInformation = UserMessagingPlatform.getConsentInformation(this);
+        ConsentRequestParameters params = new ConsentRequestParameters.Builder()
+                .setTagForUnderAgeOfConsent(false)
+                .build();
+
+        consentInformation.requestConsentInfoUpdate(
+                this,
+                params,
+                () -> UserMessagingPlatform.loadAndShowConsentFormIfRequired(this, formError -> {
+                    if (formError != null) {
+                        Log.d("Ads", "Consent form error: " + formError.getMessage());
+                    }
+                    // Whether or not a form was shown, this is the point where the
+                    // final consent state is known.
+                    startAdsIfConsented(consentInformation);
+                }),
+                requestError -> {
+                    // Network failure or similar - no consent state to act on, so ads
+                    // stay off for this launch rather than firing without consent.
+                    Log.d("Ads", "Consent info update failed: " + requestError.getMessage());
+                    startAdsIfConsented(consentInformation);
+                });
+    }
+
+    /** Starts the ads SDK only if consent permits it, and only ever once. */
+    private void startAdsIfConsented(@NonNull ConsentInformation consentInformation) {
+        if (!consentInformation.canRequestAds()) {
+            Log.d("Ads", "Consent does not allow ad requests; ads stay off");
+            return;
+        }
+        if (adsStarted.compareAndSet(false, true)) {
+            initAdsSdk();
+        }
+    }
+
+    /**
      * Initializes the GMA Next-Gen SDK and starts preloading an interstitial so one
      * is ready by the time the player finishes a run. Init must happen off the UI
      * thread or it can ANR; preloading keeps a fresh ad on hand without a per-show
      * load delay, since InterstitialAdPreloader automatically fetches a replacement
      * each time pollAd() hands one out.
+     *
+     * Only ever called once consent has been gathered - see gatherConsentThenInitAds.
      */
     private void initAdsSdk() {
         new Thread(() -> {
@@ -275,7 +333,8 @@ public class MainActivity extends AppCompatActivity {
         // even offer the revive prompt, not after.
         @JavascriptInterface
         public boolean isReviveAvailable() {
-            return RewardedAdPreloader.isAdAvailable(REWARDED_AD_UNIT_ID);
+            // No consent means no preloader was ever started, so there is nothing to offer.
+            return adsStarted.get() && RewardedAdPreloader.isAdAvailable(REWARDED_AD_UNIT_ID);
         }
 
         @JavascriptInterface
@@ -343,8 +402,11 @@ public class MainActivity extends AppCompatActivity {
             web.destroy();
             web = null;
         }
-        InterstitialAdPreloader.destroy(INTERSTITIAL_AD_UNIT_ID);
-        RewardedAdPreloader.destroy(REWARDED_AD_UNIT_ID);
+        // Only torn down if consent actually let the preloaders start.
+        if (adsStarted.get()) {
+            InterstitialAdPreloader.destroy(INTERSTITIAL_AD_UNIT_ID);
+            RewardedAdPreloader.destroy(REWARDED_AD_UNIT_ID);
+        }
         super.onDestroy();
     }
 }
