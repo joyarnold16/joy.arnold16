@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches the page background token in css/app.css, so there is no flash
+         before first paint. Keep the two in step. -->
+    <color name="window_bg">#FFF7F3EC</color>
+    <color name="ic_launcher_bg">#FF1F5F5B</color>
+</resources>
