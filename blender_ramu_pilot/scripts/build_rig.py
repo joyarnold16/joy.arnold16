@@ -13,6 +13,7 @@ Full-canvas layer exports (no "offset" in the manifest) are auto-cropped to
 their alpha bounds into a cache folder, which keeps texture memory down.
 """
 import json
+import math
 import os
 import sys
 
@@ -88,8 +89,16 @@ def flat_material(name, img):
     clear = nt.nodes.new("ShaderNodeBsdfTransparent")
     mix = nt.nodes.new("ShaderNodeMixShader")
     out = nt.nodes.new("ShaderNodeOutputMaterial")
+    # Object property "opacity" multiplies the art's alpha (used for cross-dissolves).
+    attr = nt.nodes.new("ShaderNodeAttribute")
+    attr.attribute_type = "OBJECT"
+    attr.attribute_name = "opacity"
+    mul = nt.nodes.new("ShaderNodeMath")
+    mul.operation = "MULTIPLY"
     nt.links.new(tex.outputs["Color"], emit.inputs["Color"])
-    nt.links.new(tex.outputs["Alpha"], mix.inputs["Fac"])
+    nt.links.new(tex.outputs["Alpha"], mul.inputs[0])
+    nt.links.new(attr.outputs["Fac"], mul.inputs[1])
+    nt.links.new(mul.outputs[0], mix.inputs["Fac"])
     nt.links.new(clear.outputs[0], mix.inputs[1])
     nt.links.new(emit.outputs[0], mix.inputs[2])
     nt.links.new(mix.outputs[0], out.inputs["Surface"])
@@ -111,7 +120,58 @@ def image_plane(name, img, corners_xz, depth, origin=(0.0, 0.0)):
         loop.uv = co
     me.materials.append(flat_material(name, img))
     obj = bpy.data.objects.new(name, me)
+    obj["opacity"] = 1.0
     return obj
+
+
+def soft_plane(name, img, corners_xz, depth, cell=0.012):
+    """Subdivided image plane for parts that bend (skinned to several bones)."""
+    x0, z0, x1, z1 = corners_xz
+    nx = max(2, int(math.ceil((x1 - x0) / cell)))
+    nz = max(2, int(math.ceil((z1 - z0) / cell)))
+    verts, faces, uvs = [], [], []
+    for j in range(nz + 1):
+        for i in range(nx + 1):
+            u, v = i / nx, j / nz
+            verts.append((x0 + u * (x1 - x0), depth, z0 + v * (z1 - z0)))
+            uvs.append((u, v))
+    for j in range(nz):
+        for i in range(nx):
+            a = j * (nx + 1) + i
+            faces.append((a, a + 1, a + nx + 2, a + nx + 1))
+    me = bpy.data.meshes.new(name)
+    me.from_pydata(verts, [], faces)
+    uv = me.uv_layers.new(name="UVMap")
+    for poly in me.polygons:
+        for li in poly.loop_indices:
+            uv.data[li].uv = uvs[me.loops[li].vertex_index]
+    me.materials.append(flat_material(name, img))
+    obj = bpy.data.objects.new(name, me)
+    obj["opacity"] = 1.0
+    return obj
+
+
+def skin_weights(obj, arm, bone_names, blend=0.06):
+    """Weights along a bone chain with a smooth blend zone at each joint, so the
+    drawing bends like a rubber hose instead of hinging."""
+    groups = [obj.vertex_groups.new(name=b) for b in bone_names]
+    joints = []
+    for a, b in zip(bone_names, bone_names[1:]):
+        bb = arm.bones[b]
+        d = (bb.tail_local - bb.head_local).normalized()
+        joints.append((bb.head_local.copy(), d))
+    for v in obj.data.vertices:
+        p = Vector((v.co.x, 0.0, v.co.z))
+        w = [1.0] + [0.0] * (len(bone_names) - 1)
+        for k, (j, d) in enumerate(joints):
+            t = (p - j).dot(Vector((d.x, 0.0, d.z)))
+            x = max(0.0, min(1.0, (t + blend) / (2 * blend)))
+            s_ = x * x * (3 - 2 * x)
+            w = [wi * (1 - s_) for wi in w]
+            w[k + 1] = s_
+        for g, wi in zip(groups, w):
+            if wi > 1e-4:
+                g.add([v.index], wi, "REPLACE")
 
 
 def part_geometry(part, canvas, manifest_path, cache_dir):
@@ -142,7 +202,7 @@ def build_view(view_name, view, ppu, manifest_path, cache_dir, master, coll):
     root = arm.edit_bones.new("root")
     root.head, root.tail = Vector((0, 0, 0)), Vector((0, 0, 0.15))
     root.align_roll(Vector((0, -1, 0)))
-    root.use_deform = False
+    root.use_deform = False   # parts never skin to root
     made = {"root": root}
     pending = dict(view["bones"])
     while pending:
@@ -160,7 +220,7 @@ def build_view(view_name, view, ppu, manifest_path, cache_dir, master, coll):
             eb.align_roll(Vector((0, -1, 0)))       # local Z toward camera: +rotZ = CCW on screen
             eb.parent = made[parent]
             eb.use_connect = False
-            eb.use_deform = False
+            eb.use_deform = True    # rigid parts ignore this; soft parts skin to it
             made[name] = eb
             del pending[name]
             progressed = True
@@ -182,19 +242,33 @@ def build_view(view_name, view, ppu, manifest_path, cache_dir, master, coll):
     tex_bytes = 0
     groups = {}
     for part in view["parts"]:
-        bone_name = part["bone"]
+        bone_name = part.get("bone") or part["bones"][0]
         if bone_name not in arm.bones:
             raise ValueError(f"view '{view_name}' part '{part['name']}' uses unknown bone '{bone_name}'")
         img, corners = part_geometry(part, canvas, manifest_path, cache_dir)
         tex_bytes += img.size[0] * img.size[1] * 4
-        obj = image_plane(f"{view_name}:{part['name']}", img, corners, -part["z"] * DEPTH_STEP)
-        coll.objects.link(obj)
-        bone = arm.bones[bone_name]
-        obj.parent = rig
-        obj.parent_type = "BONE"
-        obj.parent_bone = bone_name
-        obj.matrix_parent_inverse = (rig.matrix_world @ bone.matrix_local
-                                     @ Matrix.Translation((0, bone.length, 0))).inverted()
+        if part.get("bones"):
+            # Soft part: one drawing spanning several bones, bent by an Armature modifier.
+            for b in part["bones"]:
+                if b not in arm.bones:
+                    raise ValueError(f"view '{view_name}' soft part '{part['name']}' uses unknown bone '{b}'")
+            obj = soft_plane(f"{view_name}:{part['name']}", img, corners, -part["z"] * DEPTH_STEP)
+            coll.objects.link(obj)
+            skin_weights(obj, arm, part["bones"], part.get("blend", 0.06))
+            obj.parent = rig
+            mod = obj.modifiers.new("bend", "ARMATURE")
+            mod.object = rig
+            mod.use_deform_preserve_volume = True
+            obj["soft"] = True
+        else:
+            obj = image_plane(f"{view_name}:{part['name']}", img, corners, -part["z"] * DEPTH_STEP)
+            coll.objects.link(obj)
+            bone = arm.bones[bone_name]
+            obj.parent = rig
+            obj.parent_type = "BONE"
+            obj.parent_bone = bone_name
+            obj.matrix_parent_inverse = (rig.matrix_world @ bone.matrix_local
+                                         @ Matrix.Translation((0, bone.length, 0))).inverted()
         obj["view"] = view_name
         if "group" in part:
             obj["group"], obj["variant"] = part["group"], part["variant"]

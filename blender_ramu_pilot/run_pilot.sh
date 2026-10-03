@@ -32,7 +32,7 @@ case "$STAGE" in
   selftest)
     o=out/selftest
     bl -P tools/make_placeholder_parts.py -- --out "$o/placeholder"
-    bl -P scripts/build_rig.py -- --manifest "$o/placeholder/rig_manifest.json" --out "$o/rig.blend"
+    bl -P scripts/build_rig.py -- --manifest "$o/placeholder/rig_manifest_soft.json" --out "$o/rig.blend"
     bl "$o/rig.blend" -P scripts/preview_appearance.py -- --out "$o/appearance_preview.png" --engine "$ENGINE"
     chain "$o" "$o/rig.blend" ;;
   preview)

@@ -62,7 +62,7 @@ switch ($Stage) {
     "selftest" {
         $o = "out\selftest"
         Invoke-Blender @("-P", "tools\make_placeholder_parts.py", "--", "--out", "$o\placeholder")
-        Invoke-Blender @("-P", "scripts\build_rig.py", "--", "--manifest", "$o\placeholder\rig_manifest.json", "--out", "$o\rig.blend")
+        Invoke-Blender @("-P", "scripts\build_rig.py", "--", "--manifest", "$o\placeholder\rig_manifest_soft.json", "--out", "$o\rig.blend")
         Invoke-Blender @("$o\rig.blend", "-P", "scripts\preview_appearance.py", "--", "--out", "$o\appearance_preview.png", "--engine", $Engine)
         Invoke-Chain $o "$o\rig.blend"
     }

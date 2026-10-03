@@ -92,6 +92,7 @@ class ViewRig:
                 else:
                     bend = bend_cfg.get(f"{kind}.{s}", 1)
                 self.chain[f"{kind}.{s}"] = {"bones": (f"{a}.{s}", f"{b_}.{s}", f"{c}.{s}"), "l1": l1, "l2": l2,
+                                             "d_rest": d_rest,
                                              "r1": angle_of(v1), "r2": angle_of(v2), "bend": bend,
                                              "reach": max(0.9995 * (l1 + l2), d_rest)}
         self.heel = {}
@@ -167,6 +168,72 @@ class ViewRig:
                 pb.keyframe_insert("location", frame=frame)
 
 
+# ------------------------------------------------------------------ secondary motion
+
+# omega (rad/frame), damping ratio, inertia gain. Period ~ 2*pi/omega frames;
+# damping < 1 gives a little follow-through overshoot.
+SPRINGS = {
+    "head": (0.55, 0.55, 0.6),
+    "upper_arm.L": (0.45, 0.5, 1.0), "upper_arm.R": (0.45, 0.5, 1.0),
+    "forearm.L": (0.5, 0.45, 1.0), "forearm.R": (0.5, 0.45, 1.0),
+    "hand.L": (0.6, 0.5, 1.0), "hand.R": (0.6, 0.5, 1.0),
+}
+
+
+class SpringSet:
+    """Overlap and follow-through: selected bones chase their animated pose
+    through a damped spring and are pushed by their pivot's acceleration,
+    so a hand drags behind a swinging arm and the head nods on a stop.
+    Bones in an IK chain that frame (hand on the bowl) are left exact."""
+
+    def __init__(self):
+        self.state, self.last_frame = {}, {}
+
+    def apply(self, rig, f, deltas, hips_off, mx, exclude):
+        name = rig.name
+        if self.last_frame.get(name) != f - 1:
+            self.state[name] = {}
+        self.last_frame[name] = f
+        st = self.state[name]
+        out = dict(deltas)
+        tot, pos = {}, {}
+        for n in rig.order:
+            r = rig.rest[n]
+            p = r["parent"]
+            if p is None:
+                pos[n] = r["head"]
+                ptot = 0.0
+            else:
+                ptot = tot[p]
+                pos[n] = add(pos[p], rot(sub(r["head"], rig.rest[p]["head"]), ptot))
+            if n == "hips":
+                pos[n] = add(pos[n], hips_off)
+            rest_abs = angle_of(sub(r["tail"], r["head"]))
+            target = rest_abs + ptot + deltas.get(n, 0.0)
+            pivot = (pos[n][0] + mx, pos[n][1])
+            if n in SPRINGS and n not in exclude:
+                om, ze, gain = SPRINGS[n]
+                s_ = st.get(n)
+                if s_ is None:
+                    s_ = st[n] = {"th": target, "w": 0.0, "piv": [pivot, pivot]}
+                ax = pivot[0] - 2 * s_["piv"][1][0] + s_["piv"][0][0]
+                az = pivot[1] - 2 * s_["piv"][1][1] + s_["piv"][0][1]
+                length = math.hypot(*sub(r["tail"], r["head"]))
+                for _ in range(4):
+                    ux, uz = math.cos(s_["th"]), math.sin(s_["th"])
+                    acc = (om * om * wrap_angle(target - s_["th"]) - 2 * ze * om * s_["w"]
+                           - gain * (ux * az - uz * ax) / length)
+                    s_["w"] += acc * 0.25
+                    s_["th"] += s_["w"] * 0.25
+                s_["piv"] = [s_["piv"][1], pivot]
+                out[n] = wrap_angle(s_["th"] - rest_abs - ptot)
+            else:
+                # Track exactly, so the spring picks up from here without a jump.
+                st[n] = {"th": target, "w": 0.0, "piv": [st.get(n, {}).get("piv", [pivot, pivot])[1], pivot]}
+            tot[n] = ptot + out.get(n, 0.0)
+        return out
+
+
 # ------------------------------------------------------------------ the shot
 
 class Shot:
@@ -203,6 +270,8 @@ class Shot:
         self.contacts.setdefault("pivot", [0.0, 0.0])
         self.clamps = 0
         self.foot_contacts = {}
+        self.polish = {}
+        self.last, self.reach_start = {}, {}
 
     # -- body travel and timing envelopes
     def master_x(self, f):
@@ -260,9 +329,23 @@ class Shot:
         return (A0[0] + planted * self.fs, A0[1]), 0.0, "flat"
 
     # -- per-frame pose
-    def pose(self, f):
+    def remember(self, rig, deltas, hips_off):
+        """Final hand positions this frame, so a reach starts exactly where the hand was."""
+        tot, pos = rig._fk(deltas, hips_off)
+        self.last[rig.name] = {s: (add(pos[f"hand.{s}"], rot(rig.palm_vec(s), tot[f"hand.{s}"])), tot[f"hand.{s}"])
+                               for s in LR}
+
+    def ease(self, r, kind):
+        """Default: symmetric ease. With natural eases, reaches peak early (quick
+        start, gentle landing) and lifts peak late (slow to get going)."""
+        r = max(0.0, min(1.0, r))
+        if not self.polish.get("natural_eases"):
+            return ease_in_out(r)
+        return ease_in_out(1 - (1 - r) ** 1.25) if kind == "reach" else ease_in_out(r ** 1.3)
+
+    def pose(self, f, view=None, record=True):
         sp, w = self.spec, self.w
-        view = self.view_at(f)
+        view = view or self.view_at(f)
         rig = self.rigs[view]
         mx = self.master_x(f)
         env = self.walk_env(f)
@@ -295,6 +378,10 @@ class Shot:
                 # put a velocity kink in the hand at every zero crossing (QA caught it).
                 fwd = 0.5 * (sw + math.sqrt(sw * sw + soft * soft) - soft)
                 rots[f"forearm.{s}"] = self.fs * (5 * D2R * arm_env + 0.6 * fwd)
+            ant = self.polish.get("anticipation_deg", 0) * D2R
+            a0 = self.f0 - 8
+            if ant and a0 <= f <= self.f0:
+                rots["torso"] += self.fs * ant * math.sin(math.pi * (f - a0) / 8) ** 2   # lean back before stepping off
         else:
             rots["torso"] = 0.3 * D2R * math.sin(2 * math.pi * f / 72)
             rots["head"] = self.head_accent(f)
@@ -308,7 +395,8 @@ class Shot:
             # Walk positions are world-relative-to-shot-start; the rig rides on the master.
             ankle = (ankle_w[0] - mx, ankle_w[1]) if side_view else ankle_w
             legs[s] = ("ik", ankle, fdelta)
-            self.foot_contacts.setdefault(s, {})[f] = contact
+            if record:
+                self.foot_contacts.setdefault(s, {})[f] = contact
             if contact:
                 ch = rig.chain[f"leg.{s}"]
                 hj = rig.rest[ch["bones"][0]]["head"]
@@ -318,25 +406,43 @@ class Shot:
                     cap = ankle[1] + math.sqrt(lmax * lmax - dx * dx) - hj[1]
                     if dz > cap and side_view:
                         dz = cap
-                        self.clamps += 1
+                        self.clamps += record
 
         # Bowl: grip hand reaches its contact on the bowl and lifts; support hand comes in under it.
         bw = sp["bowl"]
+        P = self.polish
         gr, su = bw["grip"], bw.get("support")
-        r0 = bw["reach"][0]
+        r0, g = bw["reach"][0], bw["grip_frame"]
         l0, l1 = bw["lift"]
-        if not side_view and f >= r0:
-            lean_r = bw["reach_lean_deg"] * D2R
+        hx = 0.0
+        if not side_view:
             sgn = 1 if bw["rest"][0] > 0 else -1
-            if f <= bw["grip_frame"]:
-                lean_now = lean_r * ease_in_out((f - r0) / max(1, bw["grip_frame"] - r0))
-            else:
-                lean_now = lean_r * (1 - ease_in_out((f - l0) / max(1, l1 - l0)))
-            rots["torso"] = rots.get("torso", 0.0) - sgn * lean_now
-            arms[gr["hand"]] = ("ik",) + self.grip_target(rig, f, rots, (0.0, dz))
-            if su and f >= su["reach"][0]:
-                arms[su["hand"]] = ("ik",) + self.support_target(rig, f, rots, (0.0, dz))
-        return {"view": view, "mx": mx, "pose": {"hips_off": (0.0, dz), "rot": rots, "legs": legs, "arms": arms}}
+            ls = r0 - P.get("lean_lead_frames", 0)          # body leads the arm
+            if f >= ls:
+                lean_r = bw["reach_lean_deg"] * D2R
+                if f <= g:
+                    lean_now = lean_r * ease_in_out((f - ls) / max(1, g - ls))
+                else:
+                    lean_now = lean_r * (1 - ease_in_out((f - l0) / max(1, l1 - l0)))
+                rots["torso"] = rots.get("torso", 0.0) - sgn * lean_now
+            look = P.get("look_deg", 0) * D2R                 # head turns to the bowl first
+            la = r0 - P.get("look_lead_frames", 10)
+            if look and f >= la:
+                e = ease_in_out((f - la) / 8) if f <= l0 else 1 - ease_in_out((f - l0) / max(1, l1 - l0))
+                rots["head"] = rots.get("head", 0.0) - sgn * look * e
+            shift = P.get("weight_shift", 0)                  # weight moves toward the bowl before the reach
+            sa = r0 - P.get("shift_lead_frames", 8)
+            if shift and f >= sa:
+                e = ease_in_out((f - sa) / 10) if f <= l0 else 1 - ease_in_out((f - l0) / max(1, l1 - l0 + 6))
+                hx = sgn * shift * e
+                # Lower the hips just enough that straight legs still reach the planted feet.
+                d = min(rig.chain["leg.L"]["d_rest"], rig.chain["leg.R"]["d_rest"])
+                dz += math.sqrt(max(d * d - hx * hx, 0.0)) - d
+            if f >= r0:
+                arms[gr["hand"]] = ("ik",) + self.grip_target(rig, f, rots, (hx, dz))
+                if su and f >= su["reach"][0]:
+                    arms[su["hand"]] = ("ik",) + self.support_target(rig, f, rots, (hx, dz))
+        return {"view": view, "mx": mx, "pose": {"hips_off": (hx, dz), "rot": rots, "legs": legs, "arms": arms}}
 
     def bowl_pos(self, f):
         """Where the bowl's pivot (base centre) is meant to be, relative to the stop position."""
@@ -345,7 +451,7 @@ class Shot:
         l0, l1 = bw["lift"]
         if f <= l0:
             return R
-        u = ease_in_out((f - l0) / max(1, l1 - l0))
+        u = self.ease((f - l0) / max(1, l1 - l0), "lift")
         # Settle bump after arrival; sin^2 keeps velocity continuous at both ends.
         x = (f - (l1 - 4)) / 12.0
         over = bw["overshoot"] * math.sin(math.pi * x) ** 2 if 0 <= x <= 1 else 0.0
@@ -367,14 +473,25 @@ class Shot:
         total = wrap_angle(angle_deg * D2R - angle_of(rig.palm_vec(s)))
         if f >= f1:
             return target(f), total
-        tot, pos = rig._fk(rots, hips_off)
         hb = f"hand.{s}"
-        p0 = add(pos[hb], rot(rig.palm_vec(s), tot[hb]))
-        u = ease_in_out((f - f0) / max(1, f1 - f0))
+        if self.polish.get("springs"):
+            # With springs the idle hand isn't at its FK-rest spot, so start from where it really was.
+            key = (rig.name, s, f0)
+            if key not in self.reach_start:
+                prev = self.last.get(rig.name, {}).get(s)
+                if prev is None:
+                    tot, pos = rig._fk(rots, hips_off)
+                    prev = (add(pos[hb], rot(rig.palm_vec(s), tot[hb])), tot[hb])
+                self.reach_start[key] = prev
+            p0, a0 = self.reach_start[key]
+        else:
+            tot, pos = rig._fk(rots, hips_off)
+            p0, a0 = add(pos[hb], rot(rig.palm_vec(s), tot[hb])), tot[hb]
+        u = self.ease((f - f0) / max(1, f1 - f0), "reach")
         t = target(f)
         c = add(t, approach)
         p = tuple((1 - u) ** 2 * a + 2 * u * (1 - u) * b + u * u * e for a, b, e in zip(p0, c, t))
-        return p, lerp(tot[hb], total, u)
+        return p, lerp(a0, total, u)
 
     def grip_target(self, rig, f, rots, hips_off):
         bw = self.spec["bowl"]
@@ -617,6 +734,15 @@ def main():
     scene.render.use_sequencer = False
     engine = set_engine(scene, arg("--engine", spec["render"]["engine"]), spec["render"])
 
+    polish = {} if flag("--no-polish") else spec.get("polish", {})
+    shot.polish = polish
+    springs = SpringSet() if polish.get("springs") else None
+    xf = int(polish.get("crossfade_frames", 0))
+    incoming = {}                       # frame -> (view fading in, frames left before the swap)
+    for swap, v_in in shot.views[1:]:
+        for k in range(1, xf + 1):
+            incoming[swap - k] = (v_in, k)
+
     master = bpy.data.objects["ramu_master"]
     frames = range(spec["frame_start"], spec["frame_end"] + 1)
     view_timeline, clamp_frames, arm_clamps = {}, [], []
@@ -631,6 +757,13 @@ def main():
                 deltas, hips_off, clamped = rig.solve(st["pose"])
                 if clamped:
                     arm_clamps.append([f, clamped])
+                if springs:
+                    held = {f"{b}.{s_}" for s_ in st["pose"]["arms"] for b in ("upper_arm", "forearm", "hand")}
+                    deltas = springs.apply(rig, f, deltas, hips_off, st["mx"], held)
+                shot.remember(rig, deltas, hips_off)
+            elif incoming.get(f, (None,))[0] == name:
+                # Fading in for the turn: pose it like the body it replaces.
+                deltas, hips_off, _ = rig.solve(shot.pose(f, view=name, record=False)["pose"])
             else:
                 deltas, hips_off = {}, (0.0, 0.0)
             rig.apply(deltas, hips_off, f)
@@ -643,11 +776,12 @@ def main():
         last = {}
         for f in frames:
             active = view_timeline[f] == name
+            fading = incoming.get(f, (None,))[0] == name
             g = shot.groups_at(f, name)
             if active:
                 group_track[f] = g
             for o in rig.parts:
-                vis = active and (not o.get("group") or g.get(o["group"]) == o["variant"])
+                vis = (active or fading) and (not o.get("group") or g.get(o["group"]) == o["variant"])
                 if last.get(o.name) != vis:
                     o.hide_render = o.hide_viewport = not vis
                     o.keyframe_insert("hide_render", frame=f)
@@ -655,6 +789,28 @@ def main():
                     last[o.name] = vis
         for o in rig.parts:
             make_constant(o, ("hide_",))
+
+    # Cross-dissolve on each turn swap: the incoming drawing fades in on top of the outgoing one.
+    if xf:
+        for name, rig in rigs.items():
+            rig.obj.location.y = 0.0
+            rig.obj.keyframe_insert("location", index=1, frame=spec["frame_start"])
+        for swap, v_in in shot.views[1:]:
+            rig = rigs[v_in]
+            rig.obj.location.y = -0.3          # in front of the outgoing view while both show
+            rig.obj.keyframe_insert("location", index=1, frame=swap - xf)
+            rig.obj.location.y = 0.0
+            rig.obj.keyframe_insert("location", index=1, frame=swap)
+            for o in rig.parts:
+                for k in range(xf, 0, -1):
+                    o["opacity"] = (xf + 1 - k) / (xf + 1)
+                    o.keyframe_insert('["opacity"]', frame=swap - k)
+                o["opacity"] = 1.0
+                o.keyframe_insert('["opacity"]', frame=swap)
+        for name, rig in rigs.items():
+            make_constant(rig.obj, ("location",))
+            for o in rig.parts:
+                make_constant(o, ('["opacity"]',))
 
     # Bowl and table.
     bw = spec["bowl"]
@@ -690,6 +846,9 @@ def main():
     if speech_info.get("audio"):
         add_sound(scene, speech_info["audio"], spec["line"]["start_frame"])
     r = scene.render
+    r.use_motion_blur = bool(polish.get("motion_blur"))
+    if r.use_motion_blur:
+        r.motion_blur_shutter = polish.get("shutter", 0.5)
     r.use_stamp = bool(spec.get("stamp_frame_numbers") or placeholder)
     for attr in ("use_stamp_date", "use_stamp_time", "use_stamp_render_time", "use_stamp_camera",
                  "use_stamp_lens", "use_stamp_scene", "use_stamp_filename", "use_stamp_marker",
@@ -721,6 +880,7 @@ def main():
                         **({"support_start": bw["support"]["reach"][0], "support_contact": bw["support"]["reach"][1]}
                            if bw.get("support") else {})},
         "leg_reach_clamps": clamp_frames, "ik_clamps": arm_clamps,
+        "polish": polish, "crossfade": {str(f): v for f, (v, _) in incoming.items()},
     }
     plan_path = os.path.splitext(out)[0] + ".plan.json"
     save_json(plan_path, plan)
@@ -728,7 +888,7 @@ def main():
     scene.frame_set(spec["frame_start"])
     bpy.ops.wm.save_as_mainfile(filepath=out)
     print(f"ANIMATE ok: {out} engine={engine} clamps={len(clamp_frames)} ik_clamps={len(arm_clamps)} "
-          f"speech={speech_info.get('cues_source')}")
+          f"speech={speech_info.get('cues_source')} polish={'on' if polish else 'off'}")
 
 
 if __name__ == "__main__":

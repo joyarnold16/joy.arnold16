@@ -146,12 +146,14 @@ def main():
             s["hand_low_over_table"] = low
         vis = {}
         stray = 0
+        fading_in = plan.get("crossfade", {}).get(str(f))
         for v, objs in parts.items():
             for o in objs:
                 if o.hide_render:
                     continue
                 if v != view:
-                    stray += 1
+                    if v != fading_in:      # the next view may show while it fades in for a turn
+                        stray += 1
                 elif o.get("group"):
                     vis.setdefault(o["group"], []).append(o["variant"])
         s["groups"], s["stray_visible"] = vis, stray

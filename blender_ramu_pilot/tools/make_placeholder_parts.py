@@ -9,6 +9,7 @@ manifest with joint pivots.
 Run with Blender's Python (it ships numpy) or any Python with numpy:
     blender -b --factory-startup -P tools/make_placeholder_parts.py -- --out placeholder
 """
+import json
 import math
 import os
 import sys
@@ -155,7 +156,7 @@ def build_view(view, yaw, out_dir):
         d = P[name_l][2]
         return "near" if d > 0.01 else "far" if d < -0.01 else "mid"
 
-    parts, bones = [], {}
+    parts, bones, soft = [], {}, []
 
     def xy(k):
         return [round(P[k][0], 1), round(P[k][1], 1)]
@@ -177,7 +178,7 @@ def build_view(view, yaw, out_dir):
         bones[f"foot.{s}"] = {"parent": f"shin.{s}", "head": xy(f"ankle.{s}"), "tail": xy(f"toe.{s}"),
                               "heel": xy(f"heel.{s}")}
 
-    def add(name, bone, z, shapes, fill, group=None, variant=None):
+    def add(name, bone, z, shapes, fill, group=None, variant=None, into=None):
         layer = Layer()
         for shp in shapes:
             if isinstance(shp, tuple) and len(shp) == 3:
@@ -189,10 +190,14 @@ def build_view(view, yaw, out_dir):
         off = layer.save_cropped(os.path.join(out_dir, rel))
         if off is None:
             return
-        part = {"name": name, "file": rel, "bone": bone, "z": z, "offset": off}
+        part = {"name": name, "file": rel, "z": z, "offset": off}
+        if isinstance(bone, list):
+            part["bones"] = bone
+        else:
+            part["bone"] = bone
         if group:
             part["group"], part["variant"] = group, variant
-        parts.append(part)
+        (parts if into is None else into).append(part)
 
     zbase = {"far": (1, 4), "mid": (50, 10), "near": (55, 40)}   # (arm base, leg base)
     for s in ("L", "R"):
@@ -223,6 +228,13 @@ def build_view(view, yaw, out_dir):
         foot = sdf_union(sdf_capsule(an, he, px(0.042), px(0.034)), sdf_capsule(he, to, px(0.034), px(0.03)),
                          sdf_ellipse(to, px(0.035 + 0.02 * math.cos(t)), px(0.032)))
         add(f"foot.{s}", f"foot.{s}", leg_z + 2, [foot], col)
+        # Soft-rig versions: one unbroken drawing per limb, bent by two bones.
+        add(f"arm_soft.{s}", [f"upper_arm.{s}", f"forearm.{s}"], arm_z + 1,
+            [sdf_union(sdf_capsule(sh, el, px(0.048), px(0.04)), sdf_capsule(el, wr, px(0.04), px(0.033)))],
+            col, into=soft)
+        add(f"leg_soft.{s}", [f"thigh.{s}", f"shin.{s}"], leg_z + 1,
+            [sdf_union(sdf_capsule(hp, kn, px(0.07), px(0.056)), sdf_capsule(kn, an, px(0.055), px(0.042)))],
+            col, into=soft)
 
     def width(wx, wy):
         return math.sqrt((wx * math.cos(t)) ** 2 + (wy * math.sin(t)) ** 2)
@@ -234,6 +246,10 @@ def build_view(view, yaw, out_dir):
     neck_a, neck_b = proj((0, 0, 1.40), yaw)[:2], proj((0, 0.0, 1.52), yaw)[:2]
     add("torso", "torso", 21, [sdf_union(sdf_capsule(bot, top, px(width(0.145, 0.10)), px(width(0.16, 0.105))),
                                          sdf_capsule(neck_a, neck_b, px(0.045), px(0.045)))], MID)
+    add("body_soft", ["hips", "torso"], 21,
+        [sdf_union(sdf_ellipse(hc[:2], px(width(0.15, 0.11)), px(0.085)),
+                   sdf_capsule(bot, top, px(width(0.145, 0.10)), px(width(0.16, 0.105))),
+                   sdf_capsule(neck_a, neck_b, px(0.045), px(0.045)))], MID, into=soft)
 
     hcx, hcy, hdepth = P["head_c"]
     add("head", "head", 30, [sdf_ellipse((hcx, hcy), px(width(HEAD_R[0], HEAD_R[1])), px(HEAD_R[2]))], HEAD)
@@ -308,8 +324,11 @@ def build_view(view, yaw, out_dir):
     defaults = {"eyes": "open", "brows": "neutral", "mouth": "X", "hand.L": "open", "hand.R": "open"}
     bend = ({"leg.L": 1, "leg.R": 1, "arm.L": -1, "arm.R": -1} if yaw > 1 else
             {"leg.L": 1, "leg.R": -1, "arm.L": 1, "arm.R": -1})
+    replaced = {"upper_arm.L", "forearm.L", "upper_arm.R", "forearm.R", "thigh.L", "shin.L", "thigh.R", "shin.R",
+                "pelvis", "torso"}
+    soft_parts = [p for p in parts if p["name"] not in replaced] + soft
     return {"canvas": [W, H], "ground_origin": [OX, OY], "bones": bones, "parts": parts,
-            "defaults": defaults, "ik_bend": bend}
+            "defaults": defaults, "ik_bend": bend, "_soft_parts": soft_parts}
 
 
 def build_props(out_dir):
@@ -356,9 +375,16 @@ def main():
         "views": {v: build_view(v, yaw, out) for v, yaw in VIEWS.items()},
         "props": build_props(out),
     }
+    soft = json.loads(json.dumps(manifest))
+    for v in manifest["views"].values():
+        v.pop("_soft_parts")
+    for v in soft["views"].values():
+        v["parts"] = v.pop("_soft_parts")
+    soft["note"] += " Soft-rig variant: limbs and body are single drawings that bend."
     save_json(os.path.join(out, "rig_manifest.json"), manifest)
+    save_json(os.path.join(out, "rig_manifest_soft.json"), soft)
     n = sum(len(v["parts"]) for v in manifest["views"].values())
-    print(f"placeholder: {n} parts in {len(VIEWS)} views -> {out}")
+    print(f"placeholder: {n} parts in {len(VIEWS)} views -> {out} (+ soft-rig manifest)")
 
 
 if __name__ == "__main__":

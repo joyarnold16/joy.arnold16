@@ -85,6 +85,23 @@ the right hand supports at `base`. The table is optional set dressing with
 its `pivot` at the centre of the tabletop; it can be replaced by background
 art at the same height.
 
+## 2b. Rigid or soft limbs
+
+Two ways to prepare arms, legs and body. They can be mixed per part.
+
+- **Rigid pieces** (`"bone": ...`): upper arm, forearm, thigh, shin, pelvis
+  and torso are separate layers, joined with round overlapping ends (section
+  3). This is the classic paper-puppet look.
+- **Soft limbs** (`"bones": [a, b]`): one unbroken drawing per limb
+  (`arm_soft.L` covers shoulder to wrist; `leg_soft.L` covers hip to ankle)
+  and one for the body (`body_soft` covers pelvis to neck). The rig bends it
+  smoothly at the elbow, knee or waist, like a rubber hose. It's smoother, and
+  easier to cut because joints need no overlap caps. Draw the limb straight
+  and relaxed; strong muscle or fold detail at a joint will stretch.
+
+Hands, feet, head and face stay separate rigid layers either way. See
+`rig_manifest_soft.json` from the placeholder tool for a working example.
+
 ## 3. Joint rules (these make or break a cutout rig)
 
 1. **Overlap at every joint.** Each child part extends past its joint with a

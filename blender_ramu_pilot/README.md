@@ -35,6 +35,7 @@ What this approach costs:
 | `rig/ramu_rig.template.json` | The real manifest to fill in once the art is cut (bones, pivots, 91 layers in 3 views). |
 | `shots/test_10s.json` | The shot as data: timings, step length, turn frames, line, bowl positions, camera. |
 | `run_pilot.ps1` / `run_pilot.sh` | Stages: `selftest`, `preview`, `test`. |
+| `AGENTS.md` (+ `CLAUDE.md`) | Briefing for any agent working here: rules, commands, checks, design decisions, open items. Codex reads it automatically. |
 
 ## Running it (Windows)
 
@@ -144,6 +145,29 @@ reached its target point. Now:
 The checks run in a flat picture, so a hand hanging *beside* the table can't
 be told apart from one *behind* it. That is why the table check only covers
 the frames when the hand is at the bowl.
+
+## Smoothness: before / after
+
+The same shot, generated twice from the same code: `--no-polish` with rigid
+pieces, against the defaults with the soft rig.
+
+| | Before | After |
+|---|---|---|
+| Limbs and waist | rigid pieces hinge at joints | one drawing per limb, bends smoothly (soft rig) |
+| Head, arms, hands | move exactly in step with the body | lag, then settle (springs driven by real body acceleration) |
+| Starting off and reaching | everything starts together | lean back before stepping; body leans and head looks before the arm reaches; weight shifts first |
+| Speed curves | one symmetric ease everywhere | reaches start quickly and land gently; lifts start slowly |
+| Turn | hard swap between drawings | 2-frame cross-dissolve, plus a blink |
+| Fast moves | sharp | motion blur (needs about 32 Cycles samples) |
+
+Both versions pass all 10 QA checks. Feet slide 0 px, the hand–bowl gap is
+≤0.001 px, and there are 0 pops.
+
+The first "after" version started reaches 2–3× more abruptly than the
+baseline, measured from hand acceleration. That was tuned down before
+rendering. One flaw is still there: during the 2 cross-dissolve frames, each
+part fades on its own, so the incoming figure shows its body through its arms.
+Fixing it means compositing each view as a whole before fading.
 
 ## Not done / needs a person
 

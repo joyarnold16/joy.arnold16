@@ -60,8 +60,23 @@
     "overshoot": 0.012,
     "reach_lean_deg": 6,
     "grip": {"hand": "L", "contact": "rim_left", "hand_angle_deg": -80, "variant": "grip", "approach": [-0.02, 0.10]},
-    "support": {"hand": "R", "contact": "base", "hand_angle_deg": 0, "variant": "support", "reach": [196, 212],
+    "support": {"hand": "R", "contact": "base", "hand_angle_deg": 0, "variant": "support", "reach": [194, 212],
                 "approach": [-0.08, -0.05]}
+  },
+
+  "polish": {
+    "springs": true,
+    "anticipation_deg": 1.5,
+    "lean_lead_frames": 4,
+    "look_deg": 3,
+    "look_lead_frames": 10,
+    "weight_shift": 0.015,
+    "shift_lead_frames": 8,
+    "natural_eases": true,
+    "crossfade_frames": 2,
+    "motion_blur": true,
+    "shutter": 0.5,
+    "cycles_samples": 32
   },
 
   "camera": [

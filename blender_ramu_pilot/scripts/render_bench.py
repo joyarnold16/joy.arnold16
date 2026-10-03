@@ -140,8 +140,15 @@ def main():
         sys.exit(f"STOP: GPU busy (one heavy GPU job at a time): {busy}")
 
     rs = shot["render"]
-    engine = set_engine(scene, arg("--engine", rs["engine"]), rs.get("eevee_samples", 16),
-                        rs.get("cycles_samples", 16), arg("--cycles-device", "GPU"))
+    cyc = rs.get("cycles_samples", 16)
+    if scene.render.use_motion_blur:
+        cyc = max(cyc, plan.get("polish", {}).get("cycles_samples", 32))   # blur needs more samples to look clean
+    engine = set_engine(scene, arg("--engine", rs["engine"]), rs.get("eevee_samples", 16), cyc,
+                        arg("--cycles-device", "GPU"))
+    if arg("--note"):
+        scene.render.use_stamp = scene.render.use_stamp_note = True
+        scene.render.stamp_note_text = (scene.render.stamp_note_text + "  |  " if scene.render.stamp_note_text else "") \
+            + arg("--note")
     pct = int(arg("--percent", 100))
     scene.render.resolution_percentage = pct
     if arg("--frames"):
@@ -204,6 +211,7 @@ def main():
                         "gpu_renderer": renderer},
         "placeholder": plan["placeholder"],
         "engine": engine, "samples": scene.eevee.taa_render_samples if "EEVEE" in engine else scene.cycles.samples,
+        "motion_blur": scene.render.use_motion_blur,
         "resolution": res, "fps": shot["fps"], "frames": [scene.frame_start, scene.frame_end], "frame_count": len(ft),
         "time_s": {"total_wall": round(wall, 2), "first_frame": round(ft[0], 2) if ft else None,
                    "mean_after_first": round(statistics.mean(steady), 3) if steady else None,
