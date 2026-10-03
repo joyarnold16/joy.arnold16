@@ -35,6 +35,7 @@ What this approach costs:
 | `rig/ramu_rig.template.json` | The real manifest to fill in once the art is cut (bones, pivots, 91 layers in 3 views). |
 | `shots/test_10s.json` | The shot as data: timings, step length, turn frames, line, bowl positions, camera. |
 | `run_pilot.ps1` / `run_pilot.sh` | Stages: `selftest`, `preview`, `test`. |
+| `PILOT_REPORT.md` | Shareable test report: decisions, results, fixes, known issues, next steps, with stills and videos in `media/`. |
 | `AGENTS.md` (+ `CLAUDE.md`) | Briefing for any agent working here: rules, commands, checks, design decisions, open items. Codex reads it automatically. |
 
 ## Running it (Windows)
