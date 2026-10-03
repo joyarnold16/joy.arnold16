@@ -36,7 +36,18 @@ Shorts were changed.
   Windows.
 
 **Placeholder test results (cloud CPU; not Ramu, and not PC numbers):**
-RESULTS_PLACEHOLDER
+- **QA, measured:**
+  - feet: sliding 0.00 px, ground penetration 0.00 px
+  - bowl: hand–bowl gap 0.00 px at the grip and after it, tilt 0.00°
+  - sprites: 0 frames with a wrong mouth/eye/brow/hand variant
+  - face: 4 blinks
+  - mouth vs loudness: r = 0.62 with the mouth 1 frame early
+  - motion: 0 pops; turn swaps shift the feet 0 px and the head ≤1.4 px
+- **Render:** Cycles CPU 1080p 3.45 s/frame (13.8 min for 10 s), 522 MB peak
+  RAM. EEVEE on software OpenGL 15.8 s/frame. Not representative of the PC
+  GPU.
+- **Issue spotted by eye:** the palm-under-bowl grip would pass through the
+  tabletop. Pick a rim or two-hand grip when the real art is drawn.
 
 **Not done / blocked:**
 1. No Ramu art is cut yet, so there is no Ramu appearance preview. The

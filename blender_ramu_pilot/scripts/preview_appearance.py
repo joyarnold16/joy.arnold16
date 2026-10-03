@@ -111,7 +111,7 @@ def main():
         cam.location = (cx, -10, cz)
         cam_data.ortho_scale = ortho
         txt_data.body = caption
-        txt_data.size = ortho * 0.045
+        txt_data.size = ortho * (0.045 if w > 400 else 0.075)
         txt.location = (cx, -5, cz - ortho * (h / max(w, h)) / 2 + ortho * 0.03)
         path = os.path.join(tmp, f"{name}.png")
         scene.render.filepath = path
@@ -126,9 +126,10 @@ def main():
         head_z[v] = ((hb.head_local.x + hb.tail_local.x) / 2, (hb.head_local.z + hb.tail_local.z) / 2 - 0.02)
 
     bowl = props.get("bowl")
+    bowl_view = "front" if "front" in rigs else list(rigs)[-1]
     for v in rigs:
         show(v)
-        if bowl and v == list(rigs)[-1]:
+        if bowl and v == bowl_view:
             bowl.hide_render = False
             bowl.location = (0.55, 0, 0.35)
         shoot(f"rest_{v}", f"{v} - rest", 0.05, 0.95, 2.2, 520, 760, 0)

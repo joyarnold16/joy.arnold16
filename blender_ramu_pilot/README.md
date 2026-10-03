@@ -79,7 +79,53 @@ exempt because it is marked `"placeholder": true`, and its frames are stamped
 
 ## Cloud test results (placeholder parts; not Ramu)
 
-RESULTS_PLACEHOLDER
+Run on Blender 5.2.2 LTS (Linux, 4 vCPU, no GPU). The line was a robotic
+espeak-ng Hindi recording of the proposed sentence, *not Ramu's voice*. Mouth
+cues came from Rhubarb 1.14 in phonetic mode.
+
+| Check (measured from Blender's evaluated scene) | Result |
+|---|---|
+| Foot sliding while planted (810 contact frame-pairs) | 0.00 px max |
+| Feet below the ground line | 0.00 px |
+| Leg/arm reach clamps | none |
+| Hand-to-bowl gap at grip / max after grip | 0.00 px / 0.001 px |
+| Bowl movement before grip; bowl tilt while carried | 0.00 px; 0.00° |
+| Frames with ≠1 mouth/eye/brow/hand variant visible | 0 of 240 |
+| Blinks | 4, each 4 frames (half–closed–closed–half) |
+| Mouth openness vs. audio loudness | r = 0.48 at lag 0, 0.62 with the mouth 1 frame early; 1 open-mouth frame in silence |
+| Pops (velocity kinks or jumps), outside the 2 swap frames | 0 |
+| Turn swaps (side→3/4 @96, 3/4→front @100): feet / head-top shift | 0.0 / 1.4 px and 0.0 / 0.3 px |
+| MP4 | 1920×1080, 240 frames, 10.000 s, line audio starting at 4.667 s (frame 112) |
+
+The 0.00 px results are real, not a broken measurement. The IK is exact, and
+the evaluated toe was checked by hand: it stays at x = 0.520 for 12 frames
+while the hips travel 0.36 units over it. Along the way the checks caught two
+real bugs, both fixed:
+
+- the bowl followed the hand before the grip
+- a velocity kink in the elbow on every arm swing
+
+**Render time and memory: cloud CPU only, so this says nothing about the PC.**
+
+| Engine | Time | Peak RAM |
+|---|---|---|
+| Cycles, CPU, 1080p, 16 samples | 3.45 s/frame (p95 3.64 s); 13.8 min for 240 frames | 522 MB |
+| EEVEE through software OpenGL (llvmpipe), single frame | 15.8 s | 1.9 GB |
+
+- Texture memory is 13 MB, but that is for placeholder parts; real art at
+  ~2k per view will be larger.
+- The two engines' frames differ by a mean of 0.2/255, with differences only
+  on anti-aliased edges, so the CPU render shows what EEVEE will draw.
+- VRAM wasn't measured (no GPU here).
+- Real numbers come from `.\run_pilot.ps1 selftest` on the PC.
+
+**Seen on review that QA does not catch.** The placeholder grip is palm-up
+under the bowl while the bowl rests on the table. That is physically
+impossible: the fingers would pass through the tabletop. With the real art,
+pick a believable grip: a rim or side grip with the `pivot` on the bowl's
+side, or a two-hand pick-up. Then draw `hand_grip` to match. The free arm also
+stays still through the whole front section; an animation pass should give it
+some life.
 
 ## Not done / needs a person
 
