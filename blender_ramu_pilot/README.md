@@ -174,10 +174,11 @@ Fixing it means compositing each view as a whole before fading.
 1. **Cut Ramu's art into layers** for side, front and (recommended) 3/4
    views, and fill in the manifest pivots. This is the largest piece of work;
    see ART_PREP.md.
-2. **Generate the line**, अरे वाह, आज तो खीर बनी है!, in Ramu's approved voice
-   using the existing ComfyUI audio workflow. Then run Rhubarb
-   (`audio/README.md`). Installing Rhubarb on the PC is a new free tool and
-   needs your OK.
+2. **Audio is ComfyUI's job** (your decision). Renders are silent motion.
+   For lip-sync, either ComfyUI repaints the mouth on the rendered video, or
+   a WAV is passed in and Blender swaps the drawn mouth shapes
+   (`audio/README.md`). The first route needs a test on one speaking shot,
+   because those tools are trained mostly on real faces.
 3. **Run `selftest` on the PC** to get the real EEVEE/GPU render time and
    memory. The cloud numbers above are from software OpenGL / CPU and say
    nothing about the PC.

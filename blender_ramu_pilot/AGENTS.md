@@ -19,6 +19,19 @@ what you did in `00_ADMIN\AI_SYNC_STATUS.md`.
   - **Claude:** character, rig, animation, QA.
   - **Codex:** Studio integration and the job runner (wrap these scripts;
     don't rewrite them).
+- **Scope (user decision): Blender does body motion only.** ComfyUI does the
+  voice, audio and the rest of the supporting work. Renders are silent by
+  default: run `animate_test.py` without `--audio`, and the mouth stays at
+  rest.
+  - **Two lip-sync routes, both open:**
+    - (a) ComfyUI lip-syncs the rendered video. Video lip-sync models are
+      mostly trained on real faces, so test one speaking shot on the flat 2D
+      face early. For this route, keep the mouth at rest and the face large
+      and unobstructed in speaking shots.
+    - (b) Pass a line WAV (plus optional Rhubarb cues) to `animate_test.py`
+      and Blender swaps the drawn mouth shapes itself.
+  - Head accents and brow timing follow audio peaks only when audio is
+    given.
 
 ## 2. Rules (do not break)
 
@@ -64,8 +77,10 @@ manifest problems, unapproved appearance, or GPU busy.
 | `scripts/render_bench.py --out-dir D [--engine eevee\|cycles] [--percent N] [--require-idle-gpu]` | frames + MP4 + `render_report.json` (time, RAM, VRAM) |
 
 Inputs:
-- the line audio, generated in ComfyUI in Ramu's voice
-- Rhubarb cues: `rhubarb -r phonetic -f json --extendedShapes GHX`. Use
+- **Default:** none beyond the rig and the shot spec. The render is silent
+  motion.
+- **Lip-sync route (b) only:** the line WAV from ComfyUI, plus optional
+  Rhubarb cues: `rhubarb -r phonetic -f json --extendedShapes GHX`. Use
   phonetic mode for Hindi; the default mode is English-only.
 
 ## 4. How to check your work

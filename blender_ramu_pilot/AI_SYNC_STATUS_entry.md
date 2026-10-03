@@ -16,7 +16,10 @@ Also add this line to `09_WORKFLOWS\agents\README.md`:
 rules, commands, checks, design decisions and open items.
 
 **Decision (user):** a 2.5D cutout rig built from the approved Ramu art.
-ComfyUI stays responsible for the supporting images and audio. The user is
+**Blender does body motion only.** ComfyUI does the voice, audio and
+supporting work. Renders are silent; lip-sync is either ComfyUI on the
+rendered video (untested on the 2D face; test early) or Blender's drawn mouth
+shapes from a WAV. The user is
 also weighing 3D (ChatGPT suggested it for smoother motion); the open item is
 a one-day 3D likeness test (see AGENTS.md §6).
 
@@ -55,9 +58,9 @@ ComfyUI workflows, models, voices, production settings, EP07 or Shorts.
 1. **Ramu's art isn't cut into layers yet**, so there is no Ramu appearance
    preview. See `ART_PREP.md` and `rig/ramu_rig.template.json` (side + front
    required, 3/4 recommended; rigid or soft limbs).
-2. **The Hindi line** hasn't been generated in Ramu's voice. Proposed:
-   अरे वाह, आज तो खीर बनी है! It goes through ComfyUI audio, then Rhubarb
-   `-r phonetic`; installing Rhubarb needs the user's OK.
+2. **Audio and lip-sync are ComfyUI's job** (user decision). One open
+   question: does ComfyUI video lip-sync work on the flat 2D face? Test it on
+   one speaking shot.
 3. **No PC GPU numbers yet:** run `.\run_pilot.ps1 selftest` with ComfyUI
    idle.
 4. **Known flaw:** the turn's cross-dissolve shows an "x-ray" look for 2
