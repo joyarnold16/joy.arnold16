@@ -1,0 +1,954 @@
+{
+ "_readme": "Fill every null from the cut Ramu art (see ART_PREP.md). Coordinates are canvas pixels, y down. build_rig.py lists anything still missing. 'offset' is optional: full-canvas layer exports are auto-cropped.",
+ "character": "ramu",
+ "placeholder": false,
+ "appearance_approved": null,
+ "px_per_unit": null,
+ "views": {
+  "side_R": {
+   "canvas": null,
+   "ground_origin": null,
+   "bones": {
+    "hips": {
+     "parent": null,
+     "head": null,
+     "tail": null
+    },
+    "torso": {
+     "parent": "hips",
+     "head": null,
+     "tail": null
+    },
+    "head": {
+     "parent": "torso",
+     "head": null,
+     "tail": null
+    },
+    "upper_arm.L": {
+     "parent": "torso",
+     "head": null,
+     "tail": null
+    },
+    "forearm.L": {
+     "parent": "upper_arm.L",
+     "head": null,
+     "tail": null
+    },
+    "hand.L": {
+     "parent": "forearm.L",
+     "head": null,
+     "tail": null
+    },
+    "thigh.L": {
+     "parent": "hips",
+     "head": null,
+     "tail": null
+    },
+    "shin.L": {
+     "parent": "thigh.L",
+     "head": null,
+     "tail": null
+    },
+    "foot.L": {
+     "parent": "shin.L",
+     "heel": null,
+     "head": null,
+     "tail": null
+    },
+    "upper_arm.R": {
+     "parent": "torso",
+     "head": null,
+     "tail": null
+    },
+    "forearm.R": {
+     "parent": "upper_arm.R",
+     "head": null,
+     "tail": null
+    },
+    "hand.R": {
+     "parent": "forearm.R",
+     "head": null,
+     "tail": null
+    },
+    "thigh.R": {
+     "parent": "hips",
+     "head": null,
+     "tail": null
+    },
+    "shin.R": {
+     "parent": "thigh.R",
+     "head": null,
+     "tail": null
+    },
+    "foot.R": {
+     "parent": "shin.R",
+     "heel": null,
+     "head": null,
+     "tail": null
+    }
+   },
+   "parts": [
+    {
+     "name": "upper_arm.L",
+     "file": "parts/side_R/upper_arm.L.png",
+     "bone": "upper_arm.L",
+     "z": 1
+    },
+    {
+     "name": "forearm.L",
+     "file": "parts/side_R/forearm.L.png",
+     "bone": "forearm.L",
+     "z": 2
+    },
+    {
+     "name": "hand_open.L",
+     "file": "parts/side_R/hand_open.L.png",
+     "bone": "hand.L",
+     "z": 3,
+     "group": "hand.L",
+     "variant": "open"
+    },
+    {
+     "name": "hand_grip.L",
+     "file": "parts/side_R/hand_grip.L.png",
+     "bone": "hand.L",
+     "z": 3,
+     "group": "hand.L",
+     "variant": "grip"
+    },
+    {
+     "name": "shin.L",
+     "file": "parts/side_R/shin.L.png",
+     "bone": "shin.L",
+     "z": 4
+    },
+    {
+     "name": "thigh.L",
+     "file": "parts/side_R/thigh.L.png",
+     "bone": "thigh.L",
+     "z": 5
+    },
+    {
+     "name": "foot.L",
+     "file": "parts/side_R/foot.L.png",
+     "bone": "foot.L",
+     "z": 6
+    },
+    {
+     "name": "upper_arm.R",
+     "file": "parts/side_R/upper_arm.R.png",
+     "bone": "upper_arm.R",
+     "z": 55
+    },
+    {
+     "name": "forearm.R",
+     "file": "parts/side_R/forearm.R.png",
+     "bone": "forearm.R",
+     "z": 56
+    },
+    {
+     "name": "hand_open.R",
+     "file": "parts/side_R/hand_open.R.png",
+     "bone": "hand.R",
+     "z": 57,
+     "group": "hand.R",
+     "variant": "open"
+    },
+    {
+     "name": "hand_grip.R",
+     "file": "parts/side_R/hand_grip.R.png",
+     "bone": "hand.R",
+     "z": 57,
+     "group": "hand.R",
+     "variant": "grip"
+    },
+    {
+     "name": "shin.R",
+     "file": "parts/side_R/shin.R.png",
+     "bone": "shin.R",
+     "z": 40
+    },
+    {
+     "name": "thigh.R",
+     "file": "parts/side_R/thigh.R.png",
+     "bone": "thigh.R",
+     "z": 41
+    },
+    {
+     "name": "foot.R",
+     "file": "parts/side_R/foot.R.png",
+     "bone": "foot.R",
+     "z": 42
+    },
+    {
+     "name": "pelvis",
+     "file": "parts/side_R/pelvis.png",
+     "bone": "hips",
+     "z": 20
+    },
+    {
+     "name": "torso",
+     "file": "parts/side_R/torso.png",
+     "bone": "torso",
+     "z": 21
+    },
+    {
+     "name": "head",
+     "file": "parts/side_R/head.png",
+     "bone": "head",
+     "z": 30
+    },
+    {
+     "name": "eyes_open",
+     "file": "parts/side_R/eyes_open.png",
+     "bone": "head",
+     "z": 32,
+     "group": "eyes",
+     "variant": "open"
+    },
+    {
+     "name": "eyes_half",
+     "file": "parts/side_R/eyes_half.png",
+     "bone": "head",
+     "z": 32,
+     "group": "eyes",
+     "variant": "half"
+    },
+    {
+     "name": "eyes_closed",
+     "file": "parts/side_R/eyes_closed.png",
+     "bone": "head",
+     "z": 32,
+     "group": "eyes",
+     "variant": "closed"
+    },
+    {
+     "name": "brows_neutral",
+     "file": "parts/side_R/brows_neutral.png",
+     "bone": "head",
+     "z": 33,
+     "group": "brows",
+     "variant": "neutral"
+    },
+    {
+     "name": "brows_raised",
+     "file": "parts/side_R/brows_raised.png",
+     "bone": "head",
+     "z": 33,
+     "group": "brows",
+     "variant": "raised"
+    },
+    {
+     "name": "mouth_X",
+     "file": "parts/side_R/mouth_X.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "X"
+    },
+    {
+     "name": "mouth_smile",
+     "file": "parts/side_R/mouth_smile.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "smile"
+    },
+    {
+     "name": "ACCESSORY_EXAMPLE_rename_or_delete",
+     "file": "parts/side_R/ACCESSORY_EXAMPLE_rename_or_delete.png",
+     "bone": "head",
+     "z": 35
+    }
+   ],
+   "defaults": {
+    "eyes": "open",
+    "brows": "neutral",
+    "mouth": "X",
+    "hand.L": "open",
+    "hand.R": "open"
+   },
+   "ik_bend": {
+    "leg.L": 1,
+    "leg.R": 1,
+    "arm.L": -1,
+    "arm.R": -1
+   }
+  },
+  "three_quarter": {
+   "canvas": null,
+   "ground_origin": null,
+   "bones": {
+    "hips": {
+     "parent": null,
+     "head": null,
+     "tail": null
+    },
+    "torso": {
+     "parent": "hips",
+     "head": null,
+     "tail": null
+    },
+    "head": {
+     "parent": "torso",
+     "head": null,
+     "tail": null
+    },
+    "upper_arm.L": {
+     "parent": "torso",
+     "head": null,
+     "tail": null
+    },
+    "forearm.L": {
+     "parent": "upper_arm.L",
+     "head": null,
+     "tail": null
+    },
+    "hand.L": {
+     "parent": "forearm.L",
+     "head": null,
+     "tail": null
+    },
+    "thigh.L": {
+     "parent": "hips",
+     "head": null,
+     "tail": null
+    },
+    "shin.L": {
+     "parent": "thigh.L",
+     "head": null,
+     "tail": null
+    },
+    "foot.L": {
+     "parent": "shin.L",
+     "heel": null,
+     "head": null,
+     "tail": null
+    },
+    "upper_arm.R": {
+     "parent": "torso",
+     "head": null,
+     "tail": null
+    },
+    "forearm.R": {
+     "parent": "upper_arm.R",
+     "head": null,
+     "tail": null
+    },
+    "hand.R": {
+     "parent": "forearm.R",
+     "head": null,
+     "tail": null
+    },
+    "thigh.R": {
+     "parent": "hips",
+     "head": null,
+     "tail": null
+    },
+    "shin.R": {
+     "parent": "thigh.R",
+     "head": null,
+     "tail": null
+    },
+    "foot.R": {
+     "parent": "shin.R",
+     "heel": null,
+     "head": null,
+     "tail": null
+    }
+   },
+   "parts": [
+    {
+     "name": "upper_arm.L",
+     "file": "parts/three_quarter/upper_arm.L.png",
+     "bone": "upper_arm.L",
+     "z": 1
+    },
+    {
+     "name": "forearm.L",
+     "file": "parts/three_quarter/forearm.L.png",
+     "bone": "forearm.L",
+     "z": 2
+    },
+    {
+     "name": "hand_open.L",
+     "file": "parts/three_quarter/hand_open.L.png",
+     "bone": "hand.L",
+     "z": 3,
+     "group": "hand.L",
+     "variant": "open"
+    },
+    {
+     "name": "hand_grip.L",
+     "file": "parts/three_quarter/hand_grip.L.png",
+     "bone": "hand.L",
+     "z": 3,
+     "group": "hand.L",
+     "variant": "grip"
+    },
+    {
+     "name": "shin.L",
+     "file": "parts/three_quarter/shin.L.png",
+     "bone": "shin.L",
+     "z": 4
+    },
+    {
+     "name": "thigh.L",
+     "file": "parts/three_quarter/thigh.L.png",
+     "bone": "thigh.L",
+     "z": 5
+    },
+    {
+     "name": "foot.L",
+     "file": "parts/three_quarter/foot.L.png",
+     "bone": "foot.L",
+     "z": 6
+    },
+    {
+     "name": "upper_arm.R",
+     "file": "parts/three_quarter/upper_arm.R.png",
+     "bone": "upper_arm.R",
+     "z": 55
+    },
+    {
+     "name": "forearm.R",
+     "file": "parts/three_quarter/forearm.R.png",
+     "bone": "forearm.R",
+     "z": 56
+    },
+    {
+     "name": "hand_open.R",
+     "file": "parts/three_quarter/hand_open.R.png",
+     "bone": "hand.R",
+     "z": 57,
+     "group": "hand.R",
+     "variant": "open"
+    },
+    {
+     "name": "hand_grip.R",
+     "file": "parts/three_quarter/hand_grip.R.png",
+     "bone": "hand.R",
+     "z": 57,
+     "group": "hand.R",
+     "variant": "grip"
+    },
+    {
+     "name": "shin.R",
+     "file": "parts/three_quarter/shin.R.png",
+     "bone": "shin.R",
+     "z": 40
+    },
+    {
+     "name": "thigh.R",
+     "file": "parts/three_quarter/thigh.R.png",
+     "bone": "thigh.R",
+     "z": 41
+    },
+    {
+     "name": "foot.R",
+     "file": "parts/three_quarter/foot.R.png",
+     "bone": "foot.R",
+     "z": 42
+    },
+    {
+     "name": "pelvis",
+     "file": "parts/three_quarter/pelvis.png",
+     "bone": "hips",
+     "z": 20
+    },
+    {
+     "name": "torso",
+     "file": "parts/three_quarter/torso.png",
+     "bone": "torso",
+     "z": 21
+    },
+    {
+     "name": "head",
+     "file": "parts/three_quarter/head.png",
+     "bone": "head",
+     "z": 30
+    },
+    {
+     "name": "eyes_open",
+     "file": "parts/three_quarter/eyes_open.png",
+     "bone": "head",
+     "z": 32,
+     "group": "eyes",
+     "variant": "open"
+    },
+    {
+     "name": "eyes_half",
+     "file": "parts/three_quarter/eyes_half.png",
+     "bone": "head",
+     "z": 32,
+     "group": "eyes",
+     "variant": "half"
+    },
+    {
+     "name": "eyes_closed",
+     "file": "parts/three_quarter/eyes_closed.png",
+     "bone": "head",
+     "z": 32,
+     "group": "eyes",
+     "variant": "closed"
+    },
+    {
+     "name": "brows_neutral",
+     "file": "parts/three_quarter/brows_neutral.png",
+     "bone": "head",
+     "z": 33,
+     "group": "brows",
+     "variant": "neutral"
+    },
+    {
+     "name": "brows_raised",
+     "file": "parts/three_quarter/brows_raised.png",
+     "bone": "head",
+     "z": 33,
+     "group": "brows",
+     "variant": "raised"
+    },
+    {
+     "name": "mouth_A",
+     "file": "parts/three_quarter/mouth_A.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "A"
+    },
+    {
+     "name": "mouth_B",
+     "file": "parts/three_quarter/mouth_B.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "B"
+    },
+    {
+     "name": "mouth_C",
+     "file": "parts/three_quarter/mouth_C.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "C"
+    },
+    {
+     "name": "mouth_D",
+     "file": "parts/three_quarter/mouth_D.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "D"
+    },
+    {
+     "name": "mouth_E",
+     "file": "parts/three_quarter/mouth_E.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "E"
+    },
+    {
+     "name": "mouth_F",
+     "file": "parts/three_quarter/mouth_F.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "F"
+    },
+    {
+     "name": "mouth_G",
+     "file": "parts/three_quarter/mouth_G.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "G"
+    },
+    {
+     "name": "mouth_H",
+     "file": "parts/three_quarter/mouth_H.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "H"
+    },
+    {
+     "name": "mouth_X",
+     "file": "parts/three_quarter/mouth_X.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "X"
+    },
+    {
+     "name": "mouth_smile",
+     "file": "parts/three_quarter/mouth_smile.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "smile"
+    },
+    {
+     "name": "ACCESSORY_EXAMPLE_rename_or_delete",
+     "file": "parts/three_quarter/ACCESSORY_EXAMPLE_rename_or_delete.png",
+     "bone": "head",
+     "z": 35
+    }
+   ],
+   "defaults": {
+    "eyes": "open",
+    "brows": "neutral",
+    "mouth": "X",
+    "hand.L": "open",
+    "hand.R": "open"
+   },
+   "ik_bend": {
+    "leg.L": 1,
+    "leg.R": 1,
+    "arm.L": -1,
+    "arm.R": -1
+   }
+  },
+  "front": {
+   "canvas": null,
+   "ground_origin": null,
+   "bones": {
+    "hips": {
+     "parent": null,
+     "head": null,
+     "tail": null
+    },
+    "torso": {
+     "parent": "hips",
+     "head": null,
+     "tail": null
+    },
+    "head": {
+     "parent": "torso",
+     "head": null,
+     "tail": null
+    },
+    "upper_arm.L": {
+     "parent": "torso",
+     "head": null,
+     "tail": null
+    },
+    "forearm.L": {
+     "parent": "upper_arm.L",
+     "head": null,
+     "tail": null
+    },
+    "hand.L": {
+     "parent": "forearm.L",
+     "head": null,
+     "tail": null
+    },
+    "thigh.L": {
+     "parent": "hips",
+     "head": null,
+     "tail": null
+    },
+    "shin.L": {
+     "parent": "thigh.L",
+     "head": null,
+     "tail": null
+    },
+    "foot.L": {
+     "parent": "shin.L",
+     "heel": null,
+     "head": null,
+     "tail": null
+    },
+    "upper_arm.R": {
+     "parent": "torso",
+     "head": null,
+     "tail": null
+    },
+    "forearm.R": {
+     "parent": "upper_arm.R",
+     "head": null,
+     "tail": null
+    },
+    "hand.R": {
+     "parent": "forearm.R",
+     "head": null,
+     "tail": null
+    },
+    "thigh.R": {
+     "parent": "hips",
+     "head": null,
+     "tail": null
+    },
+    "shin.R": {
+     "parent": "thigh.R",
+     "head": null,
+     "tail": null
+    },
+    "foot.R": {
+     "parent": "shin.R",
+     "heel": null,
+     "head": null,
+     "tail": null
+    }
+   },
+   "parts": [
+    {
+     "name": "upper_arm.L",
+     "file": "parts/front/upper_arm.L.png",
+     "bone": "upper_arm.L",
+     "z": 50
+    },
+    {
+     "name": "forearm.L",
+     "file": "parts/front/forearm.L.png",
+     "bone": "forearm.L",
+     "z": 51
+    },
+    {
+     "name": "hand_open.L",
+     "file": "parts/front/hand_open.L.png",
+     "bone": "hand.L",
+     "z": 52,
+     "group": "hand.L",
+     "variant": "open"
+    },
+    {
+     "name": "hand_grip.L",
+     "file": "parts/front/hand_grip.L.png",
+     "bone": "hand.L",
+     "z": 52,
+     "group": "hand.L",
+     "variant": "grip"
+    },
+    {
+     "name": "shin.L",
+     "file": "parts/front/shin.L.png",
+     "bone": "shin.L",
+     "z": 10
+    },
+    {
+     "name": "thigh.L",
+     "file": "parts/front/thigh.L.png",
+     "bone": "thigh.L",
+     "z": 11
+    },
+    {
+     "name": "foot.L",
+     "file": "parts/front/foot.L.png",
+     "bone": "foot.L",
+     "z": 12
+    },
+    {
+     "name": "upper_arm.R",
+     "file": "parts/front/upper_arm.R.png",
+     "bone": "upper_arm.R",
+     "z": 50
+    },
+    {
+     "name": "forearm.R",
+     "file": "parts/front/forearm.R.png",
+     "bone": "forearm.R",
+     "z": 51
+    },
+    {
+     "name": "hand_open.R",
+     "file": "parts/front/hand_open.R.png",
+     "bone": "hand.R",
+     "z": 52,
+     "group": "hand.R",
+     "variant": "open"
+    },
+    {
+     "name": "hand_grip.R",
+     "file": "parts/front/hand_grip.R.png",
+     "bone": "hand.R",
+     "z": 52,
+     "group": "hand.R",
+     "variant": "grip"
+    },
+    {
+     "name": "shin.R",
+     "file": "parts/front/shin.R.png",
+     "bone": "shin.R",
+     "z": 10
+    },
+    {
+     "name": "thigh.R",
+     "file": "parts/front/thigh.R.png",
+     "bone": "thigh.R",
+     "z": 11
+    },
+    {
+     "name": "foot.R",
+     "file": "parts/front/foot.R.png",
+     "bone": "foot.R",
+     "z": 12
+    },
+    {
+     "name": "pelvis",
+     "file": "parts/front/pelvis.png",
+     "bone": "hips",
+     "z": 20
+    },
+    {
+     "name": "torso",
+     "file": "parts/front/torso.png",
+     "bone": "torso",
+     "z": 21
+    },
+    {
+     "name": "head",
+     "file": "parts/front/head.png",
+     "bone": "head",
+     "z": 30
+    },
+    {
+     "name": "eyes_open",
+     "file": "parts/front/eyes_open.png",
+     "bone": "head",
+     "z": 32,
+     "group": "eyes",
+     "variant": "open"
+    },
+    {
+     "name": "eyes_half",
+     "file": "parts/front/eyes_half.png",
+     "bone": "head",
+     "z": 32,
+     "group": "eyes",
+     "variant": "half"
+    },
+    {
+     "name": "eyes_closed",
+     "file": "parts/front/eyes_closed.png",
+     "bone": "head",
+     "z": 32,
+     "group": "eyes",
+     "variant": "closed"
+    },
+    {
+     "name": "brows_neutral",
+     "file": "parts/front/brows_neutral.png",
+     "bone": "head",
+     "z": 33,
+     "group": "brows",
+     "variant": "neutral"
+    },
+    {
+     "name": "brows_raised",
+     "file": "parts/front/brows_raised.png",
+     "bone": "head",
+     "z": 33,
+     "group": "brows",
+     "variant": "raised"
+    },
+    {
+     "name": "mouth_A",
+     "file": "parts/front/mouth_A.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "A"
+    },
+    {
+     "name": "mouth_B",
+     "file": "parts/front/mouth_B.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "B"
+    },
+    {
+     "name": "mouth_C",
+     "file": "parts/front/mouth_C.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "C"
+    },
+    {
+     "name": "mouth_D",
+     "file": "parts/front/mouth_D.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "D"
+    },
+    {
+     "name": "mouth_E",
+     "file": "parts/front/mouth_E.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "E"
+    },
+    {
+     "name": "mouth_F",
+     "file": "parts/front/mouth_F.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "F"
+    },
+    {
+     "name": "mouth_G",
+     "file": "parts/front/mouth_G.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "G"
+    },
+    {
+     "name": "mouth_H",
+     "file": "parts/front/mouth_H.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "H"
+    },
+    {
+     "name": "mouth_X",
+     "file": "parts/front/mouth_X.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "X"
+    },
+    {
+     "name": "mouth_smile",
+     "file": "parts/front/mouth_smile.png",
+     "bone": "head",
+     "z": 34,
+     "group": "mouth",
+     "variant": "smile"
+    },
+    {
+     "name": "ACCESSORY_EXAMPLE_rename_or_delete",
+     "file": "parts/front/ACCESSORY_EXAMPLE_rename_or_delete.png",
+     "bone": "head",
+     "z": 35
+    }
+   ],
+   "defaults": {
+    "eyes": "open",
+    "brows": "neutral",
+    "mouth": "X",
+    "hand.L": "open",
+    "hand.R": "open"
+   },
+   "ik_bend": {
+    "leg.L": 1,
+    "leg.R": -1,
+    "arm.L": 1,
+    "arm.R": -1
+   }
+  }
+ },
+ "props": {
+  "bowl": {
+   "file": "parts/props/bowl.png",
+   "pivot": null,
+   "z": 51.5
+  }
+ }
+}
