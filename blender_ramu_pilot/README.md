@@ -88,7 +88,9 @@ cues came from Rhubarb 1.14 in phonetic mode.
 | Foot sliding while planted (810 contact frame-pairs) | 0.00 px max |
 | Feet below the ground line | 0.00 px |
 | Leg/arm reach clamps | none |
-| Hand-to-bowl gap at grip / max after grip | 0.00 px / 0.001 px |
+| Hand-to-bowl gap at grip / max after grip (left hand on rim) | 0.00 px / 0.001 px |
+| Support hand under the base (right hand) | 0.001 px max gap |
+| Hand below the tabletop while at the bowl | 0 px (the old palm-under grip: 48.8 px, FAIL) |
 | Bowl movement before grip; bowl tilt while carried | 0.00 px; 0.00° |
 | Frames with ≠1 mouth/eye/brow/hand variant visible | 0 of 240 |
 | Blinks | 4, each 4 frames (half–closed–closed–half) |
@@ -119,13 +121,29 @@ real bugs, both fixed:
 - VRAM wasn't measured (no GPU here).
 - Real numbers come from `.\run_pilot.ps1 selftest` on the PC.
 
-**Seen on review that QA does not catch.** The placeholder grip is palm-up
-under the bowl while the bowl rests on the table. That is physically
-impossible: the fingers would pass through the tabletop. With the real art,
-pick a believable grip: a rim or side grip with the `pivot` on the bowl's
-side, or a two-hand pick-up. Then draw `hand_grip` to match. The free arm also
-stays still through the whole front section; an animation pass should give it
-some life.
+**Bowl pickup, revised after review.** The first version gripped the bowl
+palm-up from underneath while it sat on the table. That is physically
+impossible, and the old QA passed it because it only checked that the hand
+reached its target point. Now:
+
+- **Contact points.** The bowl has named contacts (`rim_left`, `rim_right`,
+  `base`).
+- **Grip.** The left hand comes down onto the near rim from above, with
+  fingers hooked over it, and lifts.
+- **Support.** The right hand then comes up under the base, so he holds it
+  with both hands.
+- **Staging.** The table is a realistic 0.78 units high, at near-full arm's
+  reach, so the arm comes down almost straight instead of folding into a
+  "chicken wing".
+- **New check, `hand_vs_table`.** It finds the lowest opaque pixel of the
+  visible hand drawings while the hand is at the bowl, and fails if it is
+  below the tabletop. On the old grip it measures 48.8 px through the table
+  (FAIL); on the new one, 0 px.
+- **Support hand contact** is checked too: 0.001 px gap.
+
+The checks run in a flat picture, so a hand hanging *beside* the table can't
+be told apart from one *behind* it. That is why the table check only covers
+the frames when the hand is at the bowl.
 
 ## Not done / needs a person
 
@@ -151,6 +169,9 @@ some life.
   jump sides) or a `side_L` view set. The test only walks right.
 - **Long garments** that cross the hip or knee may need extra flap layers,
   depending on Ramu's costume.
+- **Elbow direction.** In a flat picture each arm bends to one fixed side per
+  shot. If a pose wants the elbow on the other side, change the staging
+  (where the prop is), because flipping the bend mid-shot pops.
 - **Animator controls.** The bones are FK only; the IK is solved in Python
   and baked. Hand-animating later in Blender would benefit from IK controls,
   which haven't been added.

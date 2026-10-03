@@ -198,8 +198,11 @@ class Shot:
             else:
                 print(f"WARN: view '{item['view']}' not in manifest; turn skips it")
         self.cues, self.speech_frames, self.env = cues, speech_frames, env
+        bowl = bpy.data.objects.get("prop:bowl")
+        self.contacts = json.loads(bowl.get("contacts", "{}")) if bowl else {}
+        self.contacts.setdefault("pivot", [0.0, 0.0])
         self.clamps = 0
-        self.contacts = {}
+        self.foot_contacts = {}
 
     # -- body travel and timing envelopes
     def master_x(self, f):
@@ -305,7 +308,7 @@ class Shot:
             # Walk positions are world-relative-to-shot-start; the rig rides on the master.
             ankle = (ankle_w[0] - mx, ankle_w[1]) if side_view else ankle_w
             legs[s] = ("ik", ankle, fdelta)
-            self.contacts.setdefault(s, {})[f] = contact
+            self.foot_contacts.setdefault(s, {})[f] = contact
             if contact:
                 ch = rig.chain[f"leg.{s}"]
                 hj = rig.rest[ch["bones"][0]]["head"]
@@ -317,10 +320,10 @@ class Shot:
                         dz = cap
                         self.clamps += 1
 
-        # Bowl reach / lift with the chosen hand (front view).
+        # Bowl: grip hand reaches its contact on the bowl and lifts; support hand comes in under it.
         bw = sp["bowl"]
-        hand = bw["hand"]
-        r0, r1 = bw["reach"]
+        gr, su = bw["grip"], bw.get("support")
+        r0 = bw["reach"][0]
         l0, l1 = bw["lift"]
         if not side_view and f >= r0:
             lean_r = bw["reach_lean_deg"] * D2R
@@ -330,32 +333,63 @@ class Shot:
             else:
                 lean_now = lean_r * (1 - ease_in_out((f - l0) / max(1, l1 - l0)))
             rots["torso"] = rots.get("torso", 0.0) - sgn * lean_now
-            arms[hand] = ("ik",) + self.hand_target(rig, hand, f, rots, (0.0, dz))
+            arms[gr["hand"]] = ("ik",) + self.grip_target(rig, f, rots, (0.0, dz))
+            if su and f >= su["reach"][0]:
+                arms[su["hand"]] = ("ik",) + self.support_target(rig, f, rots, (0.0, dz))
         return {"view": view, "mx": mx, "pose": {"hips_off": (0.0, dz), "rot": rots, "legs": legs, "arms": arms}}
 
-    def hand_target(self, rig, s, f, rots, hips_off):
+    def bowl_pos(self, f):
+        """Where the bowl's pivot (base centre) is meant to be, relative to the stop position."""
         bw = self.spec["bowl"]
-        rest_angle = angle_of(rig.palm_vec(s))
-        grip_total = wrap_angle(bw["hand_angle_deg"] * D2R - rest_angle)
-        G, H = tuple(bw["rest"]), tuple(bw["hold"])
-        r0, g = bw["reach"][0], bw["grip_frame"]
+        R, H = tuple(bw["rest"]), tuple(bw["hold"])
         l0, l1 = bw["lift"]
-        if f <= g:
-            # Start from where the FK-rest hand is this frame, so the IK takes over without a pop.
-            tot, pos = rig._fk(rots, hips_off)
-            hb = f"hand.{s}"
-            p0 = add(pos[hb], rot(rig.palm_vec(s), tot[hb]))
-            u = ease_in_out((f - r0) / max(1, g - r0))
-            arc = 0.05 * math.sin(math.pi * u)
-            p = (lerp(p0[0], G[0], u) + arc * (1 if G[0] > 0 else -1), lerp(p0[1], G[1], u) + arc * 0.5)
-            return p, lerp(tot[hb], grip_total, u)
         if f <= l0:
-            return G, grip_total
+            return R
         u = ease_in_out((f - l0) / max(1, l1 - l0))
         # Settle bump after arrival; sin^2 keeps velocity continuous at both ends.
         x = (f - (l1 - 4)) / 12.0
         over = bw["overshoot"] * math.sin(math.pi * x) ** 2 if 0 <= x <= 1 else 0.0
-        return (lerp(G[0], H[0], u), lerp(G[1], H[1], u) + over), grip_total
+        return (lerp(R[0], H[0], u), lerp(R[1], H[1], u) + over)
+
+    def contact(self, name):
+        if name not in self.contacts:
+            raise ValueError(f"bowl has no contact point '{name}' (has: {sorted(self.contacts)})")
+        return tuple(self.contacts[name])
+
+    def _reach(self, rig, s, f, rots, hips_off, f0, f1, target, angle_deg, approach):
+        """Hand grip point from its FK-rest position onto `target(f)`.
+
+        The path is a quadratic Bezier whose control point sits at `approach`
+        (dx, dz) from the target, so the hand arrives from that side: from
+        above onto a rim, from below under a base. Eased, so IK takes over
+        from the rest pose without a pop and lands without a bump.
+        """
+        total = wrap_angle(angle_deg * D2R - angle_of(rig.palm_vec(s)))
+        if f >= f1:
+            return target(f), total
+        tot, pos = rig._fk(rots, hips_off)
+        hb = f"hand.{s}"
+        p0 = add(pos[hb], rot(rig.palm_vec(s), tot[hb]))
+        u = ease_in_out((f - f0) / max(1, f1 - f0))
+        t = target(f)
+        c = add(t, approach)
+        p = tuple((1 - u) ** 2 * a + 2 * u * (1 - u) * b + u * u * e for a, b, e in zip(p0, c, t))
+        return p, lerp(tot[hb], total, u)
+
+    def grip_target(self, rig, f, rots, hips_off):
+        bw = self.spec["bowl"]
+        gr = bw["grip"]
+        c = self.contact(gr["contact"])
+        return self._reach(rig, gr["hand"], f, rots, hips_off, bw["reach"][0], bw["grip_frame"],
+                           lambda fr: add(self.bowl_pos(fr), c), gr["hand_angle_deg"],
+                           tuple(gr.get("approach", (0.0, 0.15))))
+
+    def support_target(self, rig, f, rots, hips_off):
+        su = self.spec["bowl"]["support"]
+        c = self.contact(su["contact"])
+        return self._reach(rig, su["hand"], f, rots, hips_off, su["reach"][0], su["reach"][1],
+                           lambda fr: add(self.bowl_pos(fr), c), su["hand_angle_deg"],
+                           tuple(su.get("approach", (0.0, -0.12))))
 
     def head_accent(self, f):
         acc = self.spec["line"].get("head_accent_deg", 0) * D2R
@@ -381,8 +415,12 @@ class Shot:
             g["mouth"] = self.speech_frames[f]
         elif f >= ex.get("smile_from", 10 ** 9):
             g["mouth"] = "smile"
-        if f >= self.spec["bowl"]["grip_frame"]:
-            g[f"hand.{self.spec['bowl']['hand']}"] = "grip"
+        bw = self.spec["bowl"]
+        if f >= bw["grip_frame"] - 1:
+            g[f"hand.{bw['grip']['hand']}"] = bw["grip"].get("variant", "grip")
+        su = bw.get("support")
+        if su and f >= su["reach"][1] - 2:
+            g[f"hand.{su['hand']}"] = su.get("variant", "support")
         for grp, variant in list(g.items()):
             if grp in rig.groups and variant not in rig.groups[grp]:
                 g[grp] = rig.defaults.get(grp)
@@ -630,7 +668,7 @@ def main():
         bowl.location = (final_x + bw["rest"][0], 0.0, bw["rest"][1])
         con = bowl.constraints.new("CHILD_OF")
         con.target = rigs[grip_view].obj
-        con.subtarget = f"hand.{bw['hand']}"
+        con.subtarget = f"hand.{bw['grip']['hand']}"
         scene.frame_set(bw["grip_frame"])
         dg = bpy.context.evaluated_depsgraph_get()
         r_eval = rigs[grip_view].obj.evaluated_get(dg)
@@ -640,6 +678,12 @@ def main():
         con.influence = 1.0
         con.keyframe_insert("influence", frame=bw["grip_frame"])
         make_constant(bowl, ("constraints",))
+
+    table_info = None
+    if table:
+        scene.frame_set(spec["frame_start"])
+        corners = [table.matrix_world @ v.co for v in table.data.vertices]
+        table_info = {"top_z": table.location.z, "x_range": [min(c.x for c in corners), max(c.x for c in corners)]}
 
     build_set(spec, final_x)
     camera_track(spec, final_x)
@@ -662,17 +706,20 @@ def main():
         "resolution": spec["resolution"], "engine": engine, "placeholder": placeholder,
         "views": {str(f): v for f, v in view_timeline.items()},
         "swap_frames": [f for f in frames if f > spec["frame_start"] and view_timeline[f] != view_timeline[f - 1]],
-        "contacts": {s: {str(f): c for f, c in d.items()} for s, d in shot.contacts.items()},
+        "contacts": {s: {str(f): c for f, c in d.items()} for s, d in shot.foot_contacts.items()},
         "walk": {"start": shot.f0, "landings": shot.land, "travel": final_x},
-        "bowl": {"hand": bw["hand"], "grip_frame": bw["grip_frame"], "reach": bw["reach"], "lift": bw["lift"],
-                 "view": grip_view},
+        "bowl": {"grip": bw["grip"], "support": bw.get("support"), "grip_frame": bw["grip_frame"],
+                 "reach": bw["reach"], "lift": bw["lift"], "view": grip_view,
+                 "contacts": shot.contacts, "table": table_info},
         "speech": speech_info, "mouth": {str(f): s for f, s in speech.items()},
         "rms": env.get("rms", []), "head_accent_frames": env.get("peaks", []),
         "groups": {str(f): g for f, g in group_track.items()},
         "transitions": {"walk_start": shot.f0, "walk_stop": shot.land[-1],
                         "turn": [f for f, _ in shot.views[1:]], "speech_start": spec["line"]["start_frame"],
                         "speech_end": speech_info.get("end_frame"), "reach_start": bw["reach"][0],
-                        "grip": bw["grip_frame"], "lift_end": bw["lift"][1]},
+                        "grip": bw["grip_frame"], "lift_end": bw["lift"][1],
+                        **({"support_start": bw["support"]["reach"][0], "support_contact": bw["support"]["reach"][1]}
+                           if bw.get("support") else {})},
         "leg_reach_clamps": clamp_frames, "ik_clamps": arm_clamps,
     }
     plan_path = os.path.splitext(out)[0] + ".plan.json"

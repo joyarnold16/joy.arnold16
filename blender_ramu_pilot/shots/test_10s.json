@@ -51,16 +51,17 @@
   },
 
   "bowl": {
-    "hand": "L",
-    "rest": [0.45, 0.90],
-    "table": [0.45, 0.90],
-    "hand_angle_deg": -135,
+    "rest": [0.57, 0.78],
+    "table": [0.57, 0.78],
     "reach": [172, 186],
     "grip_frame": 186,
     "lift": [188, 204],
-    "hold": [0.12, 1.12],
-    "overshoot": 0.015,
-    "reach_lean_deg": 6
+    "hold": [0.20, 1.06],
+    "overshoot": 0.012,
+    "reach_lean_deg": 6,
+    "grip": {"hand": "L", "contact": "rim_left", "hand_angle_deg": -80, "variant": "grip", "approach": [-0.02, 0.10]},
+    "support": {"hand": "R", "contact": "base", "hand_angle_deg": 0, "variant": "support", "reach": [196, 212],
+                "approach": [-0.08, -0.05]}
   },
 
   "camera": [

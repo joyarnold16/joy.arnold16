@@ -14,6 +14,7 @@ import os
 import sys
 
 import bpy
+import numpy as np
 from mathutils import Vector
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -48,6 +49,25 @@ def pearson(a, b):
     return sum((x - ma) * (y - mb) for x, y in zip(a, b)) / math.sqrt(va * vb)
 
 
+def opaque_points(obj, step=2):
+    """Object-local positions (homogeneous, Nx4) of a part's opaque pixels."""
+    nodes = obj.active_material.node_tree.nodes
+    img = next(n.image for n in nodes if n.type == "TEX_IMAGE")
+    w, h = img.size
+    buf = np.empty(w * h * 4, np.float32)
+    img.pixels.foreach_get(buf)
+    a = buf.reshape(h, w, 4)[::step, ::step, 3]
+    ys, xs = np.nonzero(a > 0.5)
+    v = [obj.data.vertices[i].co for i in range(4)]   # (x0,z0) (x1,z0) (x1,z1) (x0,z1); rows bottom-up
+    u = (xs * step + 0.5) / w
+    t = (ys * step + 0.5) / h
+    pts = np.zeros((len(xs), 4))
+    for k in range(3):
+        pts[:, k] = v[0][k] + u * (v[1][k] - v[0][k]) + t * (v[3][k] - v[0][k])
+    pts[:, 3] = 1.0
+    return pts
+
+
 def main():
     scene = bpy.context.scene
     plan = load_json(scene["pilot_plan"])
@@ -65,6 +85,13 @@ def main():
         return b.matrix_local.inverted() @ Vector((hx, 0.0, hz))
 
     heel_l = {v: {s: heel_local(r, s) for s in LR} for v, r in rigs.items()}
+    contacts = {k: Vector((c[0], 0.0, c[1])) for k, c in plan["bowl"].get("contacts", {}).items()}
+    table = plan["bowl"].get("table")
+    hand_px = {o.name: opaque_points(o) for objs in parts.values() for o in objs
+               if str(o.get("group", "")).startswith("hand.")} if table else {}
+    # Contact phase only: from just before the grip until the bowl has left the table. Earlier in
+    # the reach a hand hanging beside the table overlaps it in 2D without touching it (no depth).
+    watch = range(plan["bowl"]["grip_frame"] - 4, plan["bowl"]["lift"][0] + 5)
     rest_z = {v: {s: {"heel": r.data.bones[f"foot.{s}"].get("heel", [0, r.data.bones[f"foot.{s}"].head_local.z])[1],
                       "toe": r.data.bones[f"foot.{s}"].tail_local.z} for s in LR} for v, r in rigs.items()}
 
@@ -99,6 +126,24 @@ def main():
             bm = bowl.evaluated_get(dg).matrix_world
             s["bowl"] = (bm.translation.x, bm.translation.z)
             s["bowl_tilt"] = math.degrees(bm.to_euler().y)
+            for k, c in contacts.items():
+                w = bm @ c
+                s[f"bowl.{k}"] = (w.x, w.z)
+        if table and f in watch:
+            # Lowest opaque pixel of each visible hand drawing that is over the tabletop.
+            low = None
+            for o in parts[view]:
+                pts = hand_px.get(o.name)
+                if pts is None or o.hide_render:
+                    continue
+                m = np.array(o.evaluated_get(dg).matrix_world)
+                w = pts @ m.T
+                over = (w[:, 0] >= table["x_range"][0]) & (w[:, 0] <= table["x_range"][1])
+                if over.any():
+                    z = float(w[over, 2].min())
+                    if low is None or z < low[0]:
+                        low = (z, o.name)
+            s["hand_low_over_table"] = low
         vis = {}
         stray = 0
         for v, objs in parts.items():
@@ -144,19 +189,44 @@ def main():
 
     # ---- hand / bowl
     if bowl:
-        g = plan["bowl"]["grip_frame"]
-        hand = plan["bowl"]["hand"]
-        gaps = {f: math.hypot(samples[f][f"palm.{hand}"][0] - samples[f]["bowl"][0],
-                              samples[f][f"palm.{hand}"][1] - samples[f]["bowl"][1]) * samples[f]["ppu"]
-                for f in range(g, f1 + 1)}
+        b = plan["bowl"]
+        g = b["grip_frame"]
+        gr = b["grip"]
+
+        def gap(f, hand, contact):
+            p, c = samples[f][f"palm.{hand}"], samples[f][f"bowl.{contact}"]
+            return math.hypot(p[0] - c[0], p[1] - c[1]) * samples[f]["ppu"]
+        grip_gaps = {f: gap(f, gr["hand"], gr["contact"]) for f in range(g, f1 + 1)}
         pre = [math.hypot(samples[f]["bowl"][0] - samples[f0]["bowl"][0], samples[f]["bowl"][1] - samples[f0]["bowl"][1])
                * samples[f]["ppu"] for f in range(f0, g)]
         tilt = [abs(samples[f]["bowl_tilt"] - samples[g]["bowl_tilt"]) for f in range(g, f1 + 1)]
-        C["hand_bowl_contact"] = {"gap_at_grip_px": round(gaps[g], 3), "max_gap_after_grip_px": round(max(gaps.values()), 3),
-                                  "bowl_moved_before_grip_px": round(max(pre, default=0.0), 3),
-                                  "max_bowl_tilt_deg": round(max(tilt), 3),
-                                  "verdict": "PASS" if gaps[g] <= 2 and max(gaps.values()) <= 1 + gaps[g] and max(pre, default=0) <= 0.5
-                                  and max(tilt) <= 1.0 else "FAIL"}
+        res = {"grip": f"{gr['hand']} hand on {gr['contact']}", "gap_at_grip_px": round(grip_gaps[g], 3),
+               "max_gap_after_grip_px": round(max(grip_gaps.values()), 3),
+               "bowl_moved_before_grip_px": round(max(pre, default=0.0), 3), "max_bowl_tilt_deg": round(max(tilt), 3)}
+        ok = grip_gaps[g] <= 2 and max(grip_gaps.values()) <= 1 + grip_gaps[g] and max(pre, default=0) <= 0.5 \
+            and max(tilt) <= 1.0
+        su = b.get("support")
+        if su:
+            arrive = su["reach"][1]
+            sg = {f: gap(f, su["hand"], su["contact"]) for f in range(arrive, f1 + 1)}
+            res.update({"support": f"{su['hand']} hand on {su['contact']} from frame {arrive}",
+                        "support_max_gap_px": round(max(sg.values()), 3)})
+            ok = ok and max(sg.values()) <= 1.0
+        res["verdict"] = "PASS" if ok else "FAIL"
+        C["hand_bowl_contact"] = res
+    if table:
+        worst = (0.0, None, None)
+        for f in watch:
+            low = samples[f].get("hand_low_over_table")
+            if low:
+                below = (table["top_z"] - low[0]) * samples[f]["ppu"]
+                if below > worst[0]:
+                    worst = (below, f, low[1])
+        C["hand_vs_table"] = {"max_px_below_tabletop": round(worst[0], 2), "frame": worst[1], "part": worst[2],
+                              "frames_checked": [watch.start, watch.stop - 1],
+                              "note": "Lowest opaque pixel of the visible hand drawings over the table while the hand "
+                                      "is at the bowl (grip-4 to lift start+4). Below the tabletop = hand through the table.",
+                              "verdict": verdict(worst[0], 1.0, 3.0)}
 
     # ---- sprite groups / expressions
     viol = []
@@ -313,6 +383,8 @@ def main():
     for k, v in C.items():
         nums = {kk: vv for kk, vv in v.items() if kk not in ("verdict", "note", "per_transition", "swaps",
                                                              "violations", "blinks", "worst", "pops")}
+        if k == "hand_vs_table":
+            nums = {kk: v[kk] for kk in ("max_px_below_tabletop", "frame", "part")}
         if k == "turn_alignment":
             nums = {f"swap@{x['frame']}": [x["feet_centre_shift_px"], x["head_top_shift_px"]] for x in v["swaps"]}
         md.append(f"| {k} | {v.get('verdict')} | {json.dumps(nums, ensure_ascii=False)[:220]} |")

@@ -46,8 +46,12 @@ Shorts were changed.
 - **Render:** Cycles CPU 1080p 3.45 s/frame (13.8 min for 10 s), 522 MB peak
   RAM. EEVEE on software OpenGL 15.8 s/frame. Not representative of the PC
   GPU.
-- **Issue spotted by eye:** the palm-under-bowl grip would pass through the
-  tabletop. Pick a rim or two-hand grip when the real art is drawn.
+- **Bowl pickup revised:** the left hand grips the near rim from above and
+  lifts, then the right hand supports the base, so the bowl is held with two
+  hands. The bowl has named contact points and the hands have
+  open/grip/support drawings.
+- **New QA check `hand_vs_table`:** the old palm-under grip went 48.8 px
+  through the tabletop (FAIL); the new one is 0 px.
 
 **Not done / blocked:**
 1. No Ramu art is cut yet, so there is no Ramu appearance preview. The

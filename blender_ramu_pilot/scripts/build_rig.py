@@ -224,6 +224,9 @@ def build_prop(name, prop, ppu, manifest_path, cache_dir, coll):
     obj = image_plane(f"prop:{name}", img, (x0, z0, x1, z1), -prop.get("z", 50) * DEPTH_STEP)
     coll.objects.link(obj)
     obj["prop"] = name
+    # Named contact points (where a hand's grip point goes), in prop space units.
+    obj["contacts"] = json.dumps({k: [(cx - pvx) / ppu, (pvy - cy) / ppu]
+                                  for k, (cx, cy) in prop.get("contacts", {}).items()})
     return obj, w * h * 4
 
 
@@ -253,6 +256,9 @@ def validate(m, manifest_path):
     for name, prop in m.get("props", {}).items():
         if prop.get("pivot") is None:
             problems.append(f"prop {name}: pivot is null")
+        for cname, c in prop.get("contacts", {}).items():
+            if c is None:
+                problems.append(f"prop {name}: contact point '{cname}' is null")
         if not os.path.exists(resolve(manifest_path, prop["file"])):
             problems.append(f"prop {name}: file not found: {prop['file']}")
     return problems

@@ -117,6 +117,14 @@
      "variant": "grip"
     },
     {
+     "name": "hand_support.L",
+     "file": "parts/side_R/hand_support.L.png",
+     "bone": "hand.L",
+     "z": 3,
+     "group": "hand.L",
+     "variant": "support"
+    },
+    {
      "name": "shin.L",
      "file": "parts/side_R/shin.L.png",
      "bone": "shin.L",
@@ -161,6 +169,14 @@
      "z": 57,
      "group": "hand.R",
      "variant": "grip"
+    },
+    {
+     "name": "hand_support.R",
+     "file": "parts/side_R/hand_support.R.png",
+     "bone": "hand.R",
+     "z": 57,
+     "group": "hand.R",
+     "variant": "support"
     },
     {
      "name": "shin.R",
@@ -387,6 +403,14 @@
      "variant": "grip"
     },
     {
+     "name": "hand_support.L",
+     "file": "parts/three_quarter/hand_support.L.png",
+     "bone": "hand.L",
+     "z": 3,
+     "group": "hand.L",
+     "variant": "support"
+    },
+    {
      "name": "shin.L",
      "file": "parts/three_quarter/shin.L.png",
      "bone": "shin.L",
@@ -431,6 +455,14 @@
      "z": 57,
      "group": "hand.R",
      "variant": "grip"
+    },
+    {
+     "name": "hand_support.R",
+     "file": "parts/three_quarter/hand_support.R.png",
+     "bone": "hand.R",
+     "z": 57,
+     "group": "hand.R",
+     "variant": "support"
     },
     {
      "name": "shin.R",
@@ -721,6 +753,14 @@
      "variant": "grip"
     },
     {
+     "name": "hand_support.L",
+     "file": "parts/front/hand_support.L.png",
+     "bone": "hand.L",
+     "z": 52,
+     "group": "hand.L",
+     "variant": "support"
+    },
+    {
      "name": "shin.L",
      "file": "parts/front/shin.L.png",
      "bone": "shin.L",
@@ -765,6 +805,14 @@
      "z": 52,
      "group": "hand.R",
      "variant": "grip"
+    },
+    {
+     "name": "hand_support.R",
+     "file": "parts/front/hand_support.R.png",
+     "bone": "hand.R",
+     "z": 52,
+     "group": "hand.R",
+     "variant": "support"
     },
     {
      "name": "shin.R",
@@ -948,7 +996,18 @@
   "bowl": {
    "file": "parts/props/bowl.png",
    "pivot": null,
-   "z": 51.5
+   "z": 51.5,
+   "contacts": {
+    "rim_left": null,
+    "rim_right": null,
+    "base": null
+   }
+  },
+  "table": {
+   "file": "parts/props/table.png",
+   "pivot": null,
+   "z": 15,
+   "_note": "optional; pivot = centre of the tabletop. Or drop it and use background art at the same height."
   }
  }
 }

@@ -41,7 +41,7 @@ Each layer is a PNG named exactly as below, in `rig/parts/<view>/`.
 | `pelvis` | hips | hips/waist; must be complete under the thigh tops |
 | `head` | head | head without eyes/brows/mouth (those are their own layers); hair, ears and nose can stay here |
 | `upper_arm.L/R`, `forearm.L/R` | same name | round cap past each joint |
-| `hand_open.L/R`, `hand_grip.L/R` | hand.L/R | grip = palm-up hold that cups the bowl |
+| `hand_open.L/R`, `hand_grip.L/R`, `hand_support.L/R` | hand.L/R | grip = fingers hooked over a rim; support = flat palm under a base |
 | `thigh.L/R`, `shin.L/R`, `foot.L/R` | same name | |
 | `eyes_open`, `eyes_half`, `eyes_closed` | head | both eyes on one layer, aligned on the head |
 | `brows_neutral`, `brows_raised` | head | |
@@ -68,8 +68,22 @@ behind it. The `z` values in the manifest set this draw order.
 
 If G or H are missing, the pipeline uses B or C in their place.
 
-**Props.** The bowl is its own PNG in `rig/parts/props/`. Its `pivot` is the
-point that touches the palm.
+**Hands.** Each hand needs three drawings: open, grip and support. The grip
+drawing has the fingers hooked over the bowl's rim. The support drawing is a
+flat palm, drawn pointing the same way as the open hand. The rig turns it
+level when it goes under the bowl.
+
+**Props.** The bowl is its own PNG in `rig/parts/props/`.
+
+- `pivot`: the centre of the bowl's underside, where it rests on the table.
+- `contacts`: where each hand's grip point goes, in bowl-canvas pixels:
+  - `rim_left` and `rim_right`: just outside each rim, slightly below the lip
+  - `base`: just under the bottom
+
+The shot picks the contacts. In the test, the left hand grips `rim_left` and
+the right hand supports at `base`. The table is optional set dressing with
+its `pivot` at the centre of the tabletop; it can be replaced by background
+art at the same height.
 
 ## 3. Joint rules (these make or break a cutout rig)
 

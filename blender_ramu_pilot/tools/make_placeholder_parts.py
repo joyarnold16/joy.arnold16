@@ -205,8 +205,18 @@ def build_view(view, yaw, out_dir):
         add(f"hand_open.{s}", f"hand.{s}", arm_z + 2,
             [sdf_union(sdf_ellipse(pa, px(0.034), px(0.04)), sdf_capsule(pa, fi, px(0.024), px(0.018)))],
             col, f"hand.{s}", "open")
+        # grip: fingers hooked over a rim, curling away from the body.
+        curl = 1 if pa[0] > OX else -1
+        hook = [pa, (pa[0], pa[1] + px(0.035)), (pa[0] + curl * px(0.022), pa[1] + px(0.05)),
+                (pa[0] + curl * px(0.036), pa[1] + px(0.036))]
         add(f"hand_grip.{s}", f"hand.{s}", arm_z + 2,
-            [sdf_ellipse(pa, px(0.042), px(0.032))], col, f"hand.{s}", "grip")
+            [sdf_union(sdf_ellipse(pa, px(0.032), px(0.034)), sdf_polyline(hook, px(0.015)))],
+            col, f"hand.{s}", "grip")
+        # support: flat palm under a base, drawn along the bone so it lies flat when the hand is turned level.
+        add(f"hand_support.{s}", f"hand.{s}", arm_z + 2,
+            [sdf_union(sdf_ellipse((pa[0], pa[1] + px(0.012)), px(0.02), px(0.05)),
+                       sdf_ellipse((pa[0] - curl * px(0.02), pa[1] - px(0.01)), px(0.012), px(0.02)))],
+            col, f"hand.{s}", "support")
         hp, kn, an, to, he = (P[f"{k}.{s}"][:2] for k in ("hip", "knee", "ankle", "toe", "heel"))
         add(f"shin.{s}", f"shin.{s}", leg_z, [sdf_capsule(kn, an, px(0.055), px(0.042))], col)
         add(f"thigh.{s}", f"thigh.{s}", leg_z + 1, [sdf_capsule(hp, kn, px(0.07), px(0.056))], col)
@@ -315,14 +325,19 @@ def build_props(out_dir):
     lay.draw(*sdf_ellipse((160, 80), 126, 24), (190, 132, 72))
     lay.draw(*sdf_ellipse((160, 80), 108, 15), (244, 232, 200), None)
     off = lay.save_cropped(os.path.join(out_dir, "parts/props/bowl.png"))
-    props["bowl"] = {"file": "parts/props/bowl.png", "offset": off, "pivot": [160, 180], "z": 51.5}
+    # pivot = underside centre (where it rests on the table). Contacts are where a
+    # hand's grip point (hand bone tail) goes: outside each rim, and under the base.
+    props["bowl"] = {"file": "parts/props/bowl.png", "offset": off, "pivot": [160, 180], "z": 51.5,
+                     "contacts": {"rim_left": [34, 90], "rim_right": [286, 90], "base": [160, 192]}}
     # Side table the bowl rests on (set dressing; real version is background art).
-    W, H = 520, 960
+    # Side table, top 0.78 units high (about hip height on a 1.8-unit character).
+    top, height = 38, 780
+    W, H = 520, top + height + 20
     lay = Layer()
-    lay.draw(*sdf_box((260, 60), 230, 22, 8), (122, 86, 58))
+    lay.draw(*sdf_box((260, top + 22), 230, 22, 8), (122, 86, 58))
     for lx in (70, 450):
-        lay.draw(*sdf_box((lx, 500), 16, 440, 6), (104, 72, 48))
-    lay.draw(*sdf_box((260, 640), 200, 10, 4), (104, 72, 48))
+        lay.draw(*sdf_box((lx, top + 22 + (height - 22) / 2), 16, (height - 22) / 2, 6), (104, 72, 48))
+    lay.draw(*sdf_box((260, top + int(height * 0.65)), 200, 10, 4), (104, 72, 48))
     off = lay.save_cropped(os.path.join(out_dir, "parts/props/table.png"))
     props["table"] = {"file": "parts/props/table.png", "offset": off, "pivot": [260, 38], "z": 15}
     W, H = W0, H0
