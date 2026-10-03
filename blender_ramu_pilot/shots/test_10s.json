@@ -1,0 +1,98 @@
+{
+  "name": "ramu_test_10s",
+  "fps": 24,
+  "frame_start": 0,
+  "frame_end": 239,
+  "resolution": [1920, 1080],
+  "stamp_frame_numbers": true,
+
+  "start_view": "side_R",
+  "facing": 1,
+
+  "walk": {
+    "start_frame": 8,
+    "steps": 6,
+    "frames_per_step": 12,
+    "swing_frames": 9,
+    "heel_roll_frames": 3,
+    "step_length": 0.36,
+    "lift_height": 0.07,
+    "heel_roll_deg": 24,
+    "toe_up_deg": 8,
+    "crouch": 0.012,
+    "bob": 0.022,
+    "lean_deg": 4,
+    "arm_swing_deg": 18,
+    "lead_foot": "R"
+  },
+
+  "turn": {
+    "dip_frames": [86, 100],
+    "dip": 0.014,
+    "sequence": [
+      {"frame": 96, "view": "three_quarter"},
+      {"frame": 100, "view": "front"}
+    ]
+  },
+
+  "line": {
+    "text_hi": "अरे वाह, आज तो खीर बनी है!",
+    "translation": "Oh wow, there's kheer today!",
+    "audio": "../audio/ramu_line.wav",
+    "cues": "../audio/ramu_line.rhubarb.json",
+    "start_frame": 112,
+    "head_accent_deg": 1.8
+  },
+
+  "expressions": {
+    "blinks": [44, 95, 150, 226],
+    "brows_raised": [[118, 136]],
+    "smile_from": 210
+  },
+
+  "bowl": {
+    "rest": [0.57, 0.78],
+    "table": [0.57, 0.78],
+    "reach": [172, 186],
+    "grip_frame": 186,
+    "lift": [188, 204],
+    "hold": [0.20, 1.06],
+    "overshoot": 0.012,
+    "reach_lean_deg": 6,
+    "grip": {"hand": "L", "contact": "rim_left", "hand_angle_deg": -80, "variant": "grip", "approach": [-0.02, 0.10]},
+    "support": {"hand": "R", "contact": "base", "hand_angle_deg": 0, "variant": "support", "reach": [194, 212],
+                "approach": [-0.08, -0.05]}
+  },
+
+  "polish": {
+    "springs": true,
+    "anticipation_deg": 1.5,
+    "lean_lead_frames": 4,
+    "look_deg": 3,
+    "look_lead_frames": 10,
+    "weight_shift": 0.015,
+    "shift_lead_frames": 8,
+    "natural_eases": true,
+    "crossfade_frames": 2,
+    "motion_blur": true,
+    "shutter": 0.5,
+    "cycles_samples": 32
+  },
+
+  "camera": [
+    {"frame": 0,   "anchor": "start", "dx": 0.30, "z": 0.98, "ortho": 4.0},
+    {"frame": 96,  "anchor": "end",   "dx": 0.10, "z": 0.98, "ortho": 4.0},
+    {"frame": 112, "anchor": "end",   "dx": 0.16, "z": 1.30, "ortho": 2.6},
+    {"frame": 239, "anchor": "end",   "dx": 0.16, "z": 1.30, "ortho": 2.6}
+  ],
+
+  "render": {
+    "engine": "eevee",
+    "eevee_samples": 16,
+    "cycles_samples": 16,
+    "backdrop": null,
+    "backdrop_color": [0.83, 0.86, 0.80],
+    "ground_color": [0.55, 0.50, 0.42],
+    "ground_ticks": true
+  }
+}
