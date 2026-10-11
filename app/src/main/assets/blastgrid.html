@@ -208,6 +208,7 @@
         <span><b>Arrows</b> move</span><span><b>CHARGE</b> place</span><span><b>&#9889;</b> detonate now</span><span><b>push</b> to shove a charge</span>
       </div>
       <div class="career" id="career"></div>
+      <button class="cta" id="ov-resume" hidden></button>
       <button class="cta" id="ov-btn">Begin shift</button>
       <button class="cta ghost" id="ov-share" hidden>Share score</button>
     </div>
@@ -265,7 +266,7 @@
     <div class="hud">
       <div class="stat"><b id="s-score">0</b><i>score</i></div>
       <div class="stat"><b id="s-level">1</b><i>sector</i></div>
-      <div class="stat" id="w-lives"><b id="s-lives">3</b><i>crew</i></div>
+      <div class="stat" id="w-lives"><b id="s-lives">2</b><i>crew</i></div>
       <div class="stat" id="w-cond"><b id="s-cond">&#9679;&#9679;&#9679;</b><i>condition</i></div>
       <div class="stat"><b id="s-bombs">1/1</b><i>charges</i></div>
       <div class="stat"><b id="s-foes">0</b><i>drones</i></div>
@@ -440,6 +441,7 @@ const ovTitle = ov.querySelector("h2");
 const ovText  = document.getElementById("ov-text");
 const ovKeys  = document.getElementById("ov-keys");
 const ovBtn   = document.getElementById("ov-btn");
+const ovResume = document.getElementById("ov-resume");
 const ovShare = document.getElementById("ov-share");
 let lastRunShareText = "";
 const draftEl    = document.getElementById("draft");
@@ -851,7 +853,7 @@ const G = {
   burn:null, burning:null, density:null,
   bombs:[], flames:[], drops:[], foes:[], bits:[], smoke:[], pops:[], lights:[], decals:[],
   exit:null, player:null,
-  level:1, lives:3, score:0, best:0,
+  level:1, lives:2, score:0, best:0,
   timeLeft:LEVEL_TIME, panic:false,
   shake:0, freeze:0, flash:0, modeT:0, clearStats:null,
   fx:true, dustT:0, crackleT:0,
@@ -959,8 +961,9 @@ function resetPlayer(){
 }
 
 function newRun(){
+  clearRun();
   career.runs++; Store.set("runs", career.runs);
-  G.level=1; G.lives=3; G.score=0; G.reviveUsed=false;
+  G.level=1; G.lives=2; G.score=0; G.reviveUsed=false;
   G.combo=0; G.comboT=0; G.streak=0; G.clean=true;
   G.stats = blankStats(); G.taken = [];
   G.player = { x:0,y:0,w:PLAYER_SIZE,h:PLAYER_SIZE, speed:94, maxBombs:1, range:1,
@@ -970,6 +973,60 @@ function newRun(){
   buildLevel(); resetPlayer(); enterIntro();
 }
 function enterIntro(){ G.mode="intro"; G.modeT=1.05; syncHud(); }
+
+/* ---- Run checkpointing ---------------------------------------------------
+   Saved at every sector gate and whenever the app goes to the background, so
+   closing the game mid-shift no longer throws the run away. The checkpoint is
+   the START of the sector you were on, not the exact tile you stood on:
+   restoring a half-destroyed grid would mean serialising five typed arrays,
+   and resuming at the gate is simpler and fairer than either guessing or
+   dropping the player into rubble. A finished run clears its checkpoint. */
+function snapshotRun(){
+  if(!G.player || G.level < 2) return;
+  if(G.mode==="title" || G.mode==="over") return;
+  const p = G.player;
+  Store.set("run", {
+    level:G.level, lives:G.lives, score:G.score, streak:G.streak,
+    reviveUsed: !!G.reviveUsed,
+    taken: G.taken.slice(),
+    stats: G.stats,
+    p: { speed:p.speed, maxBombs:p.maxBombs, range:p.range,
+         hp:p.hp, maxHp:p.maxHp, perks: Object.assign({}, p.perks) }
+  });
+}
+function clearRun(){ Store.set("run", null); }
+function savedRun(){
+  const r = Store.get("run", null);
+  return (r && r.p && r.level >= 2) ? r : null;
+}
+function resumeRun(r){
+  G.level=r.level; G.lives=r.lives; G.score=r.score;
+  G.streak=r.streak||0; G.reviveUsed=!!r.reviveUsed;
+  G.combo=0; G.comboT=0; G.clean=true;
+  G.stats = r.stats || blankStats();
+  G.taken = r.taken ? r.taken.slice() : [];
+  G.player = { x:0,y:0,w:PLAYER_SIZE,h:PLAYER_SIZE,
+               speed:r.p.speed, maxBombs:r.p.maxBombs, range:r.p.range,
+               invuln:0, face:[0,1], step:0, hp:r.p.hp, maxHp:r.p.maxHp, vx:0, vy:0,
+               choke:0, push:0, pushDir:null, perks:Object.assign({}, r.p.perks),
+               shield:false, foot:false, lastStep:0, breathT:0 };
+  buildLevel(); resetPlayer(); enterIntro();
+}
+/* Title card only: offer the checkpoint when there is one, and demote the
+   fresh-start button so continuing reads as the obvious action. */
+function refreshTitleButtons(){
+  const r = savedRun();
+  if(r){
+    ovResume.textContent = "Continue \u2014 Sector " + r.level;
+    ovResume.hidden = false;
+    ovBtn.textContent = "Start over";
+    ovBtn.classList.add("ghost");
+  } else {
+    ovResume.hidden = true;
+    ovBtn.textContent = "Begin shift";
+    ovBtn.classList.remove("ghost");
+  }
+}
 
 /* Shown once, the very first time a player reaches actual play - explains
    the two mechanics that aren't obvious from the static title-screen legend
@@ -1047,6 +1104,7 @@ function closeDraft(perk){
   G.level++;
   G.clean = true;
   buildLevel(); resetPlayer(); enterIntro();
+  snapshotRun();
 }
 
 /* ============================================================
@@ -1641,6 +1699,7 @@ function offerRevive(){
 // Called either when the player declines the revive offer, or after
 // loseCrew() finds no rewarded ad available at all.
 function finishRun(){
+  clearRun();
   const s = G.stats;
   const beat = G.score > career.best;
   const gap = career.best - G.score;
@@ -1679,6 +1738,7 @@ function finishRun(){
     G.level + " in Nanu Blastgrid. Can you beat that?\n" +
     "https://play.google.com/store/apps/details?id=com.joy.blastgrid";
   ovShare.hidden = false;
+  ovResume.hidden = true;
   updateCareer();
 }
 
@@ -2424,10 +2484,17 @@ ovShare.addEventListener("click",function(){
     ui.haptic.style.opacity = h ? "1" : ".5";
   }
   updateCareer();
+  refreshTitleButtons();
 })();
 /* Ask the native shell for an interstitial every few retries - not on the very
    first "Begin shift" tap, and not every single retry, since an ad on every
    death is the fastest way to make players quit instead of trying again. */
+ovResume.addEventListener("click",function(){
+  const r = savedRun();
+  if(!r) { refreshTitleButtons(); return; }
+  Sound.wake(); ov.hidden=true; ovShare.hidden=true; last=0; acc=0;
+  resumeRun(r);
+});
 let retryCount = 0;
 ovBtn.addEventListener("click",function(){
   if(G.mode === "over"){
@@ -2449,10 +2516,14 @@ window.blastgrid = {
 addEventListener("blur",function(){
   for(const k in input) input[k]=false;
   if(G.mode==="play") G.mode="pause";
+  snapshotRun();
 });
 
 document.addEventListener("visibilitychange",function(){
   if(document.hidden && G.mode==="play") G.mode="pause";
+  // The app can be killed outright from the recents switcher, so the last
+  // chance to persist anything is the moment the page is hidden.
+  if(document.hidden) snapshotRun();
 });
 })();
 </script>

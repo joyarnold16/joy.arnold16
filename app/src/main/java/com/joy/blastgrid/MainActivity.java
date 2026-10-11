@@ -15,6 +15,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
+import androidx.activity.EdgeToEdge;
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -76,9 +77,11 @@ public class MainActivity extends AppCompatActivity {
         // A game that idles between inputs must not let the screen sleep.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        // Edge to edge. targetSdk 35 enforces this on Android 15 regardless, so opt in
+        // Edge to edge. targetSdk 35+ enforces this on Android 15 regardless, so opt in
         // deliberately; the page already respects env(safe-area-inset-*) via viewport-fit=cover.
-        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        // EdgeToEdge.enable() rather than WindowCompat.setDecorFitsSystemWindows(), which is
+        // deprecated and which Play's release dashboard flags as a deprecated edge-to-edge API.
+        EdgeToEdge.enable(this);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             getWindow().getAttributes().layoutInDisplayCutoutMode =
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;

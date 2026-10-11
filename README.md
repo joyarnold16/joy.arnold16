@@ -42,6 +42,16 @@ WebView builds and `localStorage` then behaves inconsistently.
 Produces an AAB for Play. You will need a signing config and Play App Signing.
 `minifyEnabled` is deliberately `false`.
 
+## Run checkpoints
+
+A run is saved at every sector gate, and again whenever the page is hidden
+(`snapshotRun`), under the `run` key in the same localStorage blob. Reopening
+the app offers "Continue - Sector N" instead of dumping the player back at
+sector 1. The checkpoint is the *start* of the sector reached, not the exact
+position: restoring mid-sector would mean serialising five typed arrays of
+grid state, and resuming at the gate is both simpler and fairer. Dying clears
+the checkpoint - a finished run has nothing to go back to.
+
 ## Back button
 
 Back once pauses the run via `window.blastgrid.pause()`. Back twice within two
