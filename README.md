@@ -81,6 +81,30 @@ Three signals now, deliberately overlapping:
 - **The exit itself** pulses a halo past its own tile rather than the thin
   inner stroke it had, which read as decoration rather than as the way out.
 
+## Daily run
+
+A second entry point on the title card. The level generator - and only the
+generator - draws from a seeded xorshift32 (`makeRng`) keyed off the local
+date, so every player gets the same grid, exit and drone placement for a
+given day. Particles, drops and fire stay on `Math.random`, and so does
+`chooseCell`: drone patrol reacts to where the player is standing, so two
+people diverge within seconds no matter what. A daily promises the same
+*grid*, not the same drone.
+
+Daily runs are a separate score chase and deliberately do not touch the
+furthest-progress checkpoint. `dailyStreak` counts consecutive days with a
+finished daily and is what the title card leads with, since it is the one
+number that rewards coming back tomorrow.
+
+## The opening sector
+
+Sector 1 used to generate at the bottom of the density ramp and open almost
+empty, so a new player's first charge popped a single brick. `buildLevel`
+now seeds a pocket of pallets near the spawn, which means the first blast
+catches and spreads instead. Pallets rather than extra bricks on purpose:
+this fills floor that was empty anyway, so it does not walk back the density
+cut that made the grid readable. The spawn corner itself stays clear.
+
 ## Back button
 
 Back once pauses the run via `window.blastgrid.pause()`. Back twice within two

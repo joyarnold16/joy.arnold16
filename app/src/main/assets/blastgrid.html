@@ -215,6 +215,7 @@
       </div>
       <div class="career" id="career"></div>
       <button class="cta" id="ov-resume" hidden></button>
+      <button class="cta ghost" id="ov-daily">Daily run</button>
       <button class="cta" id="ov-btn">Begin shift</button>
       <button class="cta ghost" id="ov-share" hidden>Share score</button>
     </div>
@@ -404,6 +405,35 @@ const Store = (function(){
   };
 })();
 
+/* ---- Daily run -----------------------------------------------------------
+   xorshift32: small, fast, and plenty for laying out a grid. Only the level
+   generator draws from it. Particles, drops and fire stay on Math.random,
+   because a daily is about everyone getting the same *grid*, not the same
+   sparks - and seeding those too would mean threading a generator through
+   half the renderer for no gain. */
+function makeRng(seed){
+  let s = (seed >>> 0) || 0x9e3779b9;
+  return function(){
+    s ^= s << 13; s >>>= 0;
+    s ^= s >>> 17;
+    s ^= s << 5;  s >>>= 0;
+    return s / 4294967296;
+  };
+}
+/* Local date, not UTC: the day should roll over at the player's midnight. */
+function dayKey(d){
+  d = d || new Date();
+  return d.getFullYear() + "-" +
+         String(d.getMonth()+1).padStart(2,"0") + "-" +
+         String(d.getDate()).padStart(2,"0");
+}
+function seedOf(str){
+  let h = 2166136261 >>> 0;                       // FNV-1a
+  for(let i=0;i<str.length;i++){ h ^= str.charCodeAt(i); h = Math.imul(h,16777619) >>> 0; }
+  return h >>> 0;
+}
+function yesterdayKey(){ return dayKey(new Date(Date.now() - 86400000)); }
+
 const career = {
   best:       Store.get("best",0),
   bestSector: Store.get("bestSector",0),
@@ -448,6 +478,7 @@ const ovText  = document.getElementById("ov-text");
 const ovKeys  = document.getElementById("ov-keys");
 const ovBtn   = document.getElementById("ov-btn");
 const ovResume = document.getElementById("ov-resume");
+const ovDaily  = document.getElementById("ov-daily");
 const ovShare = document.getElementById("ov-share");
 let lastRunShareText = "";
 const draftEl    = document.getElementById("draft");
@@ -867,6 +898,7 @@ const G = {
   fx:true, dustT:0, crackleT:0,
   combo:0, comboT:0, comboFlash:0, clean:true, streak:0,
   allDown:false, cueText:"", cueT:0,
+  daily:false, seed:0, gen:null,
   stats:null, taken:[]
 };
 function blankStats(){ return { drones:0, blocks:0, columns:0, bestCombo:0, sectors:0, clean:0 }; }
@@ -906,17 +938,36 @@ function buildLevel(){
   // as "wall to wall bricks" to new players, so sector 1 now opens much
   // sparser and the pallet band is thinner too (less total clutter early on).
   const density = clamp(0.16 + G.level*0.0053, 0.16, 0.56);
+  // A daily run has to lay out the same grid for everyone, so the generator -
+  // and only the generator - runs off a seed derived from the date and the
+  // sector, rather than Math.random.
+  const rnd = G.daily ? makeRng(G.seed + G.level * 2654435761) : Math.random;
+  G.gen = rnd;                     // spawnFoe draws its idle phases from this
   const bricks = [];
   for(let y=1;y<ROWS-1;y++) for(let x=1;x<COLS-1;x++){
     const i = idx(x,y);
     if(G.grid[i] !== EMPTY || safe[x+","+y]) continue;
-    const r = Math.random();
+    const r = rnd();
     if(r < density){
       G.grid[i] = BRICK;
-      G.brickColor[i] = (Math.random()*BRICK_PALETTE.length)|0;
+      G.brickColor[i] = (rnd()*BRICK_PALETTE.length)|0;
       bricks.push([x,y]);
     }
     else if(r < density + 0.06) G.grid[i] = FLAM;          // timber pallets
+  }
+
+  // Sector 1 opened almost empty, which is a poor advertisement for a game
+  // about chain reactions: the first charge popped one brick and that was the
+  // whole first impression. A pocket of pallets near the spawn means the very
+  // first blast catches and spreads instead. Pallets rather than more bricks
+  // on purpose - this fills floor that was empty anyway, so it does not walk
+  // back the density cut that made the grid readable again.
+  if(G.level === 1){
+    for(let y=1;y<=5;y++) for(let x=1;x<=5;x++){
+      if(safe[x+","+y] || x+y < 5) continue;      // leave the spawn corner walkable
+      const j = idx(x,y);
+      if(G.grid[j] === EMPTY && rnd() < 0.55) G.grid[j] = FLAM;
+    }
   }
 
   G.bombs=[]; G.flames=[]; G.drops=[]; G.foes=[]; G.bits=[]; G.smoke=[]; G.pops=[]; G.lights=[]; G.decals=[];
@@ -925,7 +976,7 @@ function buildLevel(){
 
   if(bricks.length){
     const far = bricks.slice().sort((a,b)=>(b[0]+b[1])-(a[0]+a[1]));
-    const p = far[Math.floor(Math.random()*Math.min(far.length,10))];
+    const p = far[Math.floor(rnd()*Math.min(far.length,10))];
     G.exit = { x:p[0], y:p[1], open:false };
   } else {
     G.exit = { x:COLS-2, y:ROWS-2, open:true };
@@ -940,12 +991,12 @@ function buildLevel(){
   // tougher than the start, but nowhere near maxed out.
   const n = Math.min(2 + Math.floor(G.level/7), 10);
   for(let i=0;i<n && spots.length;i++){
-    const s = spots.splice(Math.floor(Math.random()*spots.length),1)[0];
+    const s = spots.splice(Math.floor(rnd()*spots.length),1)[0];
     let kind = "drift";
     // Tougher drone types are pushed later too, so early sectors are all the
     // slow, predictable "drift" kind.
-    if(G.level >= 15 && Math.random() < 0.15) kind = "ghost";
-    else if(G.level >= 8 && Math.random() < 0.15 + G.level*0.01) kind = "seek";
+    if(G.level >= 15 && rnd() < 0.15) kind = "ghost";
+    else if(G.level >= 8 && rnd() < 0.15 + G.level*0.01) kind = "seek";
     spawnFoe(s[0],s[1],kind);
   }
   G.timeLeft = LEVEL_TIME; G.panic = false;
@@ -957,7 +1008,11 @@ function spawnFoe(x,y,kind){
     x:x*TILE+(TILE-FOE_SIZE)/2, y:y*TILE+(TILE-FOE_SIZE)/2,
     w:FOE_SIZE, h:FOE_SIZE, cx:x, cy:y, tx:x, ty:y, dir:[0,0],
     speed: kind==="ghost"?74:kind==="seek"?62:44,
-    alive:true, wob:Math.random()*6, spin:Math.random()*6, born:0.4,
+    // Off the sector generator, not Math.random, so a daily opens on exactly
+    // the same frame for everyone. Only the opening frame: once play starts,
+    // chooseCell reacts to where the player is, so two people diverge almost
+    // immediately - a daily promises the same grid, not the same drone.
+    alive:true, wob:(G.gen||Math.random)()*6, spin:(G.gen||Math.random)()*6, born:0.4,
     vx:0, vy:0, tumble:0
   });
 }
@@ -970,8 +1025,10 @@ function resetPlayer(){
   if(p.perks.shield) p.shield = true;
 }
 
-function newRun(){
+function newRun(daily){
   career.runs++; Store.set("runs", career.runs);
+  G.daily = !!daily;
+  G.seed  = daily ? seedOf(dayKey()) : 0;
   G.level=1; G.lives=2; G.score=0; G.reviveUsed=false;
   G.combo=0; G.comboT=0; G.streak=0; G.clean=true;
   G.stats = blankStats(); G.taken = [];
@@ -980,6 +1037,7 @@ function newRun(){
                choke:0, push:0, pushDir:null, perks:{}, shield:false,
                foot:false, lastStep:0, breathT:0 };
   buildLevel(); resetPlayer(); enterIntro();
+  if(daily) cue("Daily run \u2014 same grid for everyone today");
 }
 function enterIntro(){ G.mode="intro"; G.modeT=1.05; syncHud(); }
 
@@ -998,6 +1056,7 @@ function enterIntro(){ G.mode="intro"; G.modeT=1.05; syncHud(); }
 function snapshotRun(){
   if(!G.player || G.level < 2) return;
   if(G.mode==="title" || G.mode==="over") return;
+  if(G.daily) return;          // a daily is its own score chase, not progress
   const prev = Store.get("run", null);
   if(prev && prev.p && prev.level >= G.level) return;   // never walk it backwards
   const p = G.player;
@@ -1015,6 +1074,7 @@ function savedRun(){
   return (r && r.p && r.level >= 2) ? r : null;
 }
 function resumeRun(r){
+  G.daily=false; G.seed=0;
   G.level=r.level; G.lives=r.lives; G.score=r.score;
   G.streak=r.streak||0; G.reviveUsed=!!r.reviveUsed;
   G.combo=0; G.comboT=0; G.clean=true;
@@ -1037,6 +1097,17 @@ function refreshTitleButtons(){
   if(r) ovResume.textContent = "Continue \u2014 Sector " + r.level;
   if(G.mode !== "over") ovBtn.textContent = r ? "Start over" : "Begin shift";
   ovBtn.classList.toggle("ghost", !!r);
+  refreshDailyButton();
+}
+/* The daily button carries its own status: today's best once it has been
+   played, otherwise the streak, which is the whole reason to come back. */
+function refreshDailyButton(){
+  if(!ovDaily) return;
+  const playedToday = Store.get("dailyDate","") === dayKey();
+  const streak = Store.get("dailyStreak",0);
+  ovDaily.textContent = playedToday
+    ? "Daily run \u00B7 best " + Store.get("dailyBest",0).toLocaleString()
+    : (streak > 1 ? "Daily run \u00B7 " + streak + " day streak" : "Daily run");
 }
 
 /* Shown once, the very first time a player reaches actual play - explains
@@ -1732,6 +1803,21 @@ function finishRun(){
   Store.set("blocks", career.blocks);
   Store.set("columns", career.columns);
 
+  // A finished daily rolls the day over once: today's best starts fresh, and
+  // the streak counts consecutive days with a finished daily. Played twice in
+  // a day, the streak moves once - it is a habit counter, not a run counter.
+  if(G.daily){
+    const k = dayKey();
+    if(Store.get("dailyDate","") !== k){
+      Store.set("dailyDate", k);
+      Store.set("dailyBest", 0);
+      Store.set("dailyStreak", Store.get("dailyLast","") === yesterdayKey()
+                                 ? Store.get("dailyStreak",0) + 1 : 1);
+      Store.set("dailyLast", k);
+    }
+    if(G.score > Store.get("dailyBest",0)) Store.set("dailyBest", G.score);
+  }
+
   G.mode = "over";
   Sound.over();
   Haptics.hit();
@@ -2293,7 +2379,15 @@ function updateCareer(){
     "Chain <b>\u00D7" + Math.max(1,career.bestChain) + "</b>",
     career.runs + (career.runs===1 ? " run" : " runs")
   ];
+  // The streak is the one number here that rewards coming back tomorrow, so
+  // it sits on its own line rather than buried in the run tally.
+  const streak = Store.get("dailyStreak",0);
   let html = bits.join(" &#183; ");
+  if(streak > 0){
+    const today = Store.get("dailyDate","") === dayKey();
+    html += "<br>Daily streak <b>" + streak + "</b> " + (streak===1 ? "day" : "days") +
+            (today ? " &#183; today done" : " &#183; not played today");
+  }
   if(career.drones) html += "<br>Lifetime: " + career.drones + " drones, " +
                             career.blocks + " blocks, " + career.columns + " columns";
   if(!Store.available) html += "<br>Storage blocked \u2014 this session only";
@@ -2563,6 +2657,10 @@ ovResume.addEventListener("click",function(){
   if(!r) { refreshTitleButtons(); return; }
   Sound.wake(); ov.hidden=true; ovShare.hidden=true; last=0; acc=0;
   resumeRun(r);
+});
+ovDaily.addEventListener("click",function(){
+  Sound.wake(); ov.hidden=true; ovShare.hidden=true; last=0; acc=0;
+  newRun(true);
 });
 let retryCount = 0;
 ovBtn.addEventListener("click",function(){
