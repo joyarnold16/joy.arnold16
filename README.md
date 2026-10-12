@@ -105,6 +105,17 @@ catches and spreads instead. Pallets rather than extra bricks on purpose:
 this fills floor that was empty anyway, so it does not walk back the density
 cut that made the grid readable. The spawn corner itself stays clear.
 
+## Icon
+
+The launcher icon is the blast cross - four arms and a hot core - because that
+is literally the shape a charge makes on this grid. Palette is the game's own
+(`--hazard` amber over `--void`), not the unrelated purple it shipped with.
+
+`ic_launcher_foreground.png` is rendered at scale 0.82 so the whole mark sits
+inside the adaptive-icon safe zone (the centre ~66% of the canvas); anything
+wider gets clipped by a circular mask on some launchers. The monochrome vector
+is the same shape flattened, for themed icons.
+
 ## Back button
 
 Back once pauses the run via `window.blastgrid.pause()`. Back twice within two

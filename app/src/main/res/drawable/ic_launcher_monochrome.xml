@@ -1,12 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Themed-icon silhouette: the same blast cross as the colour icon, flattened.
+     108dp canvas, art kept inside the 72dp safe zone so the mask cannot clip it. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108"
     android:tint="?attr/colorControlNormal">
-    <path android:fillColor="#FFFFFF" android:pathData="M30,34 L42,34 L30,54 L18,54 Z" />
-    <path android:fillColor="#FFFFFF" android:pathData="M50,34 L62,34 L50,54 L38,54 Z" />
-    <path android:fillColor="#FFFFFF" android:pathData="M70,34 L82,34 L70,54 L58,54 Z" />
-    <path android:fillColor="#FFFFFF" android:pathData="M44,60 h20 v22 h-20 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M58,47.5 L78.5,51.9 L82.3,54 L78.5,56.1 L58,60.5 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M50,47.5 L29.5,51.9 L25.7,54 L29.5,56.1 L50,60.5 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M47.5,58 L51.9,78.5 L54,82.3 L56.1,78.5 L60.5,58 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M47.5,50 L51.9,29.5 L54,25.7 L56.1,29.5 L60.5,50 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M54,46 m-8,0 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0" />
+    <path android:fillColor="#FFFFFF" android:pathData="M54,54 m-8,0 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0" />
 </vector>
