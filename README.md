@@ -63,6 +63,24 @@ Two deliberate limits:
 Nothing is offered until one sector has actually been cleared; sector 1 is
 where a run starts anyway, so there is nothing to continue from before that.
 
+## Telling the player what to do next
+
+A sector needs both things: every drone dead *and* the exit found. Nothing
+used to announce the first one, so clearing the patrol just made the level go
+quiet and left people wandering it.
+
+Three signals now, deliberately overlapping:
+
+- **A one-shot line** across the top the moment the last drone dies - "find
+  the exit" if it is still buried, "reach the exit" if it already turned up.
+  `G.allDown` latches so it fires once per sector.
+- **The drones tile in the HUD** re-purposes itself once the patrol is down:
+  amber "find exit" while it is buried, green "exit open" once it is not. The
+  banner fades; this does not, so there is always somewhere to read the
+  objective.
+- **The exit itself** pulses a halo past its own tile rather than the thin
+  inner stroke it had, which read as decoration rather than as the way out.
+
 ## Back button
 
 Back once pauses the run via `window.blastgrid.pause()`. Back twice within two

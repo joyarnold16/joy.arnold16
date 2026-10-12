@@ -59,6 +59,12 @@
   }
   .stat i{font-style:normal;color:var(--dim);font-size:calc(8px * var(--ui));letter-spacing:.08em;text-transform:uppercase}
   .stat.low b{color:var(--danger)}
+  /* The drones tile turns into the objective light once the patrol is down:
+     amber while the exit is still buried, green once it has turned up. */
+  .stat.cue{border-color:var(--hazard)}
+  .stat.cue b,.stat.cue i{color:var(--hazard)}
+  .stat.ok{border-color:#7fd88f}
+  .stat.ok b,.stat.ok i{color:#7fd88f}
   .bars{display:flex;gap:4px}
   .meter{height:3px;flex:1;background:var(--panel-2);border-radius:2px;overflow:hidden}
   .meter span{display:block;height:100%;width:100%;background:var(--steel);transition:width .2s linear}
@@ -269,7 +275,7 @@
       <div class="stat" id="w-lives"><b id="s-lives">2</b><i>crew</i></div>
       <div class="stat" id="w-cond"><b id="s-cond">&#9679;&#9679;&#9679;</b><i>condition</i></div>
       <div class="stat"><b id="s-bombs">1/1</b><i>charges</i></div>
-      <div class="stat"><b id="s-foes">0</b><i>drones</i></div>
+      <div class="stat" id="w-foes"><b id="s-foes">0</b><i id="s-foes-label">drones</i></div>
     </div>
 
     <div class="bars">
@@ -465,6 +471,8 @@ const ui = {
   condBox: document.getElementById("w-cond"),
   bombs: document.getElementById("s-bombs"),
   foes:  document.getElementById("s-foes"),
+  foesBox:   document.getElementById("w-foes"),
+  foesLabel: document.getElementById("s-foes-label"),
   fuse:  document.getElementById("s-fuse"),
   fuseBox: document.getElementById("w-fuse"),
   air:   document.getElementById("s-air"),
@@ -858,6 +866,7 @@ const G = {
   shake:0, freeze:0, flash:0, modeT:0, clearStats:null,
   fx:true, dustT:0, crackleT:0,
   combo:0, comboT:0, comboFlash:0, clean:true, streak:0,
+  allDown:false, cueText:"", cueT:0,
   stats:null, taken:[]
 };
 function blankStats(){ return { drones:0, blocks:0, columns:0, bestCombo:0, sectors:0, clean:0 }; }
@@ -911,6 +920,7 @@ function buildLevel(){
   }
 
   G.bombs=[]; G.flames=[]; G.drops=[]; G.foes=[]; G.bits=[]; G.smoke=[]; G.pops=[]; G.lights=[]; G.decals=[];
+  G.allDown=false; G.cueText=""; G.cueT=0;
   G.dropSpawned = false;   // only one reward pickup allowed per sector
 
   if(bricks.length){
@@ -1381,7 +1391,12 @@ function detonate(bomb, depth){
         shrapnel(x,y,["#7d736a","#645b53","#9a8d80","#3f3a35"],8,150);
         // Smoke matches the brick that just went - the same color puffs out.
         for(let k=0;k<4;k++) smokePuff(x,y,brickTint,0.4,2.0);
-        if(G.exit.x===x && G.exit.y===y){ G.exit.open=true; Sound.reveal(); }
+        if(G.exit.x===x && G.exit.y===y){
+          G.exit.open=true; Sound.reveal();
+          // Found it the other way round - patrol first, then the exit.
+          if(G.allDown) cue("Exit found \u2014 go");
+          syncHud();
+        }
         else if(Math.random() < (G.player.perks.scav ? 0.52 : 0.3)) spawnDrop(x,y);
         lightCell(x,y,"tip");
         break;
@@ -1843,6 +1858,7 @@ function draw(){
   if(G.flash>0){ ctx.fillStyle="rgba(255,232,196,"+(G.flash*1.1).toFixed(3)+")"; ctx.fillRect(0,0,W,H); }
   drawPops();
   drawCombo();
+  drawCue();
   drawChoke();
 
   const vg = ctx.createRadialGradient(W/2,H/2,H*0.3,W/2,H/2,H*0.9);
@@ -1945,9 +1961,19 @@ function drawExit(){
   ctx.strokeStyle="#4d5157"; ctx.lineWidth=3; ctx.strokeRect(x+4.5,y+4.5,TILE-9,TILE-9);
   ctx.fillStyle="rgba(0,0,0,.6)"; ctx.fillRect(x+8,y+8,TILE-16,TILE-16);
   if(ready){
-    const pulse=0.4+0.6*Math.abs(Math.sin(performance.now()/420));
-    ctx.strokeStyle="rgba(150,200,255,"+pulse.toFixed(2)+")";
-    ctx.lineWidth=2; ctx.strokeRect(x+8.5,y+8.5,TILE-17,TILE-17);
+    // Was a thin inner stroke, which read as decoration rather than as the
+    // way out. Now it throws a halo past its own tile so it is findable from
+    // the far side of the grid.
+    const pulse=0.4+0.6*Math.abs(Math.sin(performance.now()/340));
+    ctx.save();
+    ctx.globalAlpha=0.34*pulse;
+    ctx.fillStyle="#9ecbff";
+    ctx.fillRect(x-5,y-5,TILE+10,TILE+10);
+    ctx.restore();
+    ctx.strokeStyle="rgba(176,216,255,"+pulse.toFixed(2)+")";
+    ctx.lineWidth=3; ctx.strokeRect(x+6.5,y+6.5,TILE-13,TILE-13);
+    ctx.strokeStyle="rgba(255,255,255,"+(pulse*0.75).toFixed(2)+")";
+    ctx.lineWidth=1.5; ctx.strokeRect(x+10.5,y+10.5,TILE-21,TILE-21);
   }
 }
 function drawDrops(){
@@ -2187,6 +2213,25 @@ function drawCard(){
       : "+"+SCORE.clear+" clearance   +"+cs.bonus+" time");
   }
 }
+/* A short line across the top of the grid for the one moment the objective
+   changes. The drones tile below carries the same state permanently, so a
+   player who blinks through this still has somewhere to read it. */
+function cue(text){ G.cueText = text; G.cueT = 2.8; }
+function drawCue(){
+  if(G.cueT<=0 || !G.cueText) return;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, G.cueT/0.5);
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.font="bold 15px ui-monospace,monospace";
+  const y = H*0.16, w = ctx.measureText(G.cueText).width + 30;
+  ctx.fillStyle="rgba(11,10,12,.80)";
+  ctx.fillRect(W/2-w/2, y-16, w, 32);
+  ctx.strokeStyle="rgba(240,194,70,.6)"; ctx.lineWidth=1;
+  ctx.strokeRect(W/2-w/2+0.5, y-15.5, w-1, 31);
+  ctx.fillStyle="#f0c246";
+  ctx.fillText(G.cueText, W/2, y+1);
+  ctx.restore();
+}
 function banner(text,color){
   ctx.textAlign="center"; ctx.textBaseline="middle";
   ctx.font="bold 28px ui-monospace,monospace";
@@ -2212,7 +2257,19 @@ function syncHud(){
   ui.condBox.classList.toggle("low", p.hp<=1);
   const live = G.bombs.filter(b=>!b.dead).length;
   ui.bombs.textContent = (p.maxBombs-live)+"/"+p.maxBombs;
-  ui.foes.textContent = G.foes.filter(f=>f.alive).length;
+  const liveFoes = G.foes.filter(f=>f.alive).length;
+  ui.foes.textContent = liveFoes;
+  // Once the patrol is down the drone count is no longer the useful number;
+  // whether the exit has turned up is. Same tile, re-purposed, so there is a
+  // permanent answer to "what now?" and not just a banner that already faded.
+  if(ui.foesBox){
+    const done = G.foes.length > 0 && liveFoes === 0;
+    ui.foesBox.classList.toggle("cue", done && !G.exit.open);
+    ui.foesBox.classList.toggle("ok",  done && !!G.exit.open);
+    if(ui.foesLabel){
+      ui.foesLabel.textContent = done ? (G.exit.open ? "exit open" : "find exit") : "drones";
+    }
+  }
 }
 function syncMeters(){
   const pct = clamp(G.timeLeft/LEVEL_TIME,0,1);
@@ -2283,6 +2340,17 @@ function tick(dt){
   updateBombs(dt);
   updateBurning(dt);
   updateFoes(dt);
+
+  // Clearing the patrol is the point the objective changes, and until now
+  // nothing said so: the level went quiet and the player was left wandering
+  // it with no idea the exit was the remaining step.
+  if(!G.allDown && G.foes.length && !G.foes.some(f=>f.alive)){
+    G.allDown = true;
+    cue(G.exit.open ? "Patrol down \u2014 reach the exit"
+                    : "Patrol down \u2014 find the exit");
+    Sound.reveal();
+    syncHud();
+  }
 }
 
 let last=0, acc=0;
@@ -2298,6 +2366,7 @@ function frame(now){
     while(acc>=STEP && guard++<240){ tick(STEP); acc-=STEP; }
     updateParticles(dt);
     if(G.shake>0) G.shake=Math.max(0,G.shake-dt*48);
+    if(G.cueT>0) G.cueT=Math.max(0,G.cueT-dt);
     if(G.flash>0) G.flash=Math.max(0,G.flash-dt*1.1);
     if(G.comboFlash>0) G.comboFlash=Math.max(0,G.comboFlash-dt*3.2);
     syncMeters(); syncHud();
