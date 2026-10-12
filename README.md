@@ -42,15 +42,26 @@ WebView builds and `localStorage` then behaves inconsistently.
 Produces an AAB for Play. You will need a signing config and Play App Signing.
 `minifyEnabled` is deliberately `false`.
 
-## Run checkpoints
+## Furthest-progress checkpoint
 
-A run is saved at every sector gate, and again whenever the page is hidden
-(`snapshotRun`), under the `run` key in the same localStorage blob. Reopening
-the app offers "Continue - Sector N" instead of dumping the player back at
-sector 1. The checkpoint is the *start* of the sector reached, not the exact
-position: restoring mid-sector would mean serialising five typed arrays of
-grid state, and resuming at the gate is both simpler and fairer. Dying clears
-the checkpoint - a finished run has nothing to go back to.
+`snapshotRun` records the deepest sector ever reached, together with the kit
+held at the time, under the `run` key in the same localStorage blob. It is
+written at every sector gate and whenever the page is hidden, and it is never
+discarded - not on death, not on starting over - so the overlay can always
+offer "Continue - Sector N" rather than making anyone replay ground they have
+already cleared.
+
+Two deliberate limits:
+
+- It restores the **start** of that sector, not the exact position. Persisting
+  a half-destroyed level would mean serialising five typed arrays of grid
+  state, and the sector gate is both simpler and fairer than dropping the
+  player into rubble.
+- It only moves **forward**. A short run after a deep one must not overwrite
+  the deep one, so `snapshotRun` ignores any level at or below the stored one.
+
+Nothing is offered until one sector has actually been cleared; sector 1 is
+where a run starts anyway, so there is nothing to continue from before that.
 
 ## Back button
 

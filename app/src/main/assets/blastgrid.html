@@ -961,7 +961,6 @@ function resetPlayer(){
 }
 
 function newRun(){
-  clearRun();
   career.runs++; Store.set("runs", career.runs);
   G.level=1; G.lives=2; G.score=0; G.reviveUsed=false;
   G.combo=0; G.comboT=0; G.streak=0; G.clean=true;
@@ -974,16 +973,23 @@ function newRun(){
 }
 function enterIntro(){ G.mode="intro"; G.modeT=1.05; syncHud(); }
 
-/* ---- Run checkpointing ---------------------------------------------------
-   Saved at every sector gate and whenever the app goes to the background, so
-   closing the game mid-shift no longer throws the run away. The checkpoint is
-   the START of the sector you were on, not the exact tile you stood on:
-   restoring a half-destroyed grid would mean serialising five typed arrays,
-   and resuming at the gate is simpler and fairer than either guessing or
-   dropping the player into rubble. A finished run clears its checkpoint. */
+/* ---- Furthest-progress checkpoint ---------------------------------------
+   Written at every sector gate (and when the app goes to the background) and
+   never thrown away - not on death, not on starting over. It records the
+   deepest sector ever reached together with the kit held at the time, so the
+   title card can always offer "Continue - Sector N" instead of making anyone
+   grind back through ground they have already cleared.
+
+   Two deliberate limits. It restores the START of that sector rather than the
+   exact tile: persisting a half-destroyed grid means serialising five typed
+   arrays, and the sector gate is both simpler and fairer than dropping the
+   player into rubble. And it only ever moves forward - a short run after a
+   deep one must not overwrite the deep one, so a lower sector is ignored. */
 function snapshotRun(){
   if(!G.player || G.level < 2) return;
   if(G.mode==="title" || G.mode==="over") return;
+  const prev = Store.get("run", null);
+  if(prev && prev.p && prev.level >= G.level) return;   // never walk it backwards
   const p = G.player;
   Store.set("run", {
     level:G.level, lives:G.lives, score:G.score, streak:G.streak,
@@ -994,7 +1000,6 @@ function snapshotRun(){
          hp:p.hp, maxHp:p.maxHp, perks: Object.assign({}, p.perks) }
   });
 }
-function clearRun(){ Store.set("run", null); }
 function savedRun(){
   const r = Store.get("run", null);
   return (r && r.p && r.level >= 2) ? r : null;
@@ -1012,20 +1017,16 @@ function resumeRun(r){
                shield:false, foot:false, lastStep:0, breathT:0 };
   buildLevel(); resetPlayer(); enterIntro();
 }
-/* Title card only: offer the checkpoint when there is one, and demote the
-   fresh-start button so continuing reads as the obvious action. */
+/* Offers the checkpoint wherever the overlay is showing - the title card and
+   the game-over card both - and steps the fresh-start button aside whenever
+   there is progress worth continuing from. The game-over card keeps its own
+   "Run it back" wording, so only the title card relabels. */
 function refreshTitleButtons(){
   const r = savedRun();
-  if(r){
-    ovResume.textContent = "Continue \u2014 Sector " + r.level;
-    ovResume.hidden = false;
-    ovBtn.textContent = "Start over";
-    ovBtn.classList.add("ghost");
-  } else {
-    ovResume.hidden = true;
-    ovBtn.textContent = "Begin shift";
-    ovBtn.classList.remove("ghost");
-  }
+  ovResume.hidden = !r;
+  if(r) ovResume.textContent = "Continue \u2014 Sector " + r.level;
+  if(G.mode !== "over") ovBtn.textContent = r ? "Start over" : "Begin shift";
+  ovBtn.classList.toggle("ghost", !!r);
 }
 
 /* Shown once, the very first time a player reaches actual play - explains
@@ -1699,7 +1700,6 @@ function offerRevive(){
 // Called either when the player declines the revive offer, or after
 // loseCrew() finds no rewarded ad available at all.
 function finishRun(){
-  clearRun();
   const s = G.stats;
   const beat = G.score > career.best;
   const gap = career.best - G.score;
@@ -1738,8 +1738,8 @@ function finishRun(){
     G.level + " in Nanu Blastgrid. Can you beat that?\n" +
     "https://play.google.com/store/apps/details?id=com.joy.blastgrid";
   ovShare.hidden = false;
-  ovResume.hidden = true;
   updateCareer();
+  refreshTitleButtons();
 }
 
 // Native calls this once the rewarded ad flow is done, one way or the other.
