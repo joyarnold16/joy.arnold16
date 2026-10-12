@@ -2,7 +2,7 @@
 <resources>
     <color name="void_bg">#FF0E0D10</color>
     <color name="hazard">#FFF0C246</color>
-    <!-- Matches --void in blastgrid.html, so the launcher tile reads as the
-         same object as the game behind it. -->
+    <!-- Matches the void background in blastgrid.html, so the launcher tile
+         reads as the same object as the game behind it. -->
     <color name="ic_launcher_background">#FF0E0D10</color>
 </resources>
