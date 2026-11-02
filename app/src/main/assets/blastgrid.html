@@ -933,11 +933,12 @@ function buildLevel(){
   }
 
   const safe = { "1,1":1,"2,1":1,"1,2":1,"3,1":1,"1,3":1 };
-  // Ramps from an open, walkable sector 1 up to the same eventual max as
-  // before (0.56) but over ~75 sectors - a 0.30 starting density still read
-  // as "wall to wall bricks" to new players, so sector 1 now opens much
-  // sparser and the pallet band is thinner too (less total clutter early on).
-  const density = clamp(0.16 + G.level*0.0053, 0.16, 0.56);
+  // 0.16 left sector 1 three-quarters empty floor: 273 tiles, 42 destructible,
+  // two drones. That reads as deserted rather than open, and most of a first
+  // session was spent walking across nothing. The cut to 0.16 was made against
+  // a report of jank that turned out to be the FX watchdog, fixed separately -
+  // so it was an over-correction for a problem density was not causing.
+  const density = clamp(0.28 + G.level*0.0045, 0.28, 0.58);
   // A daily run has to lay out the same grid for everyone, so the generator -
   // and only the generator - runs off a seed derived from the date and the
   // sector, rather than Math.random.
@@ -985,11 +986,10 @@ function buildLevel(){
   const spots = [];
   for(let y=1;y<ROWS-1;y++) for(let x=1;x<COLS-1;x++)
     if(G.grid[idx(x,y)] === EMPTY && x+y > 6) spots.push([x,y]);
-  // Drone count climbs one every 7 sectors instead of every single sector, so the
-  // cap of 10 lands around sector 56 (late game) rather than sector 7. Sector 1
-  // now starts at 2 drones instead of 3, and sector 30 sits at 6 - noticeably
-  // tougher than the start, but nowhere near maxed out.
-  const n = Math.min(2 + Math.floor(G.level/7), 10);
+  // Three to start, not two: on a board this size two drones are easy to never
+  // meet, and an arena you can cross without being threatened is not tense, it
+  // is just long. Still ramps slowly - sector 30 sits at 8, the cap lands late.
+  const n = Math.min(3 + Math.floor(G.level/6), 10);
   for(let i=0;i<n && spots.length;i++){
     const s = spots.splice(Math.floor(rnd()*spots.length),1)[0];
     let kind = "drift";
@@ -1934,7 +1934,7 @@ function draw(){
 
   ctx.drawImage(FLOOR,0,0,W,H);
   drawDecals(); drawScorch(); drawRubble(); drawExit(); drawShadows();
-  drawDrops(); drawBlocks(); drawBombs(); drawFoes(); drawPlayer();
+  drawDrops(); drawBlocks(); drawSurveyMark(); drawBombs(); drawFoes(); drawPlayer();
   drawFire(); drawBits();
   if(G.fx) drawSmoke();
 
@@ -2061,6 +2061,27 @@ function drawExit(){
     ctx.strokeStyle="rgba(255,255,255,"+(pulse*0.75).toFixed(2)+")";
     ctx.lineWidth=1.5; ctx.strokeRect(x+10.5,y+10.5,TILE-21,TILE-21);
   }
+}
+/* Corner ticks over the brick still hiding the exit, shown only once the
+   patrol is down. Measured on generated sectors, the exit sits ~20 tiles from
+   the spawn with about six candidate bricks at that depth - so without this
+   the end of every sector is roughly eighteen seconds of breaking rubble at
+   random, which is a search, not a decision. Holding it back until the drones
+   are gone keeps the reward for stumbling on it early. */
+function drawSurveyMark(){
+  if(G.exit.open || !G.allDown) return;
+  const x=G.exit.x*TILE, y=G.exit.y*TILE;
+  const m=7, L=11;
+  ctx.save();
+  ctx.globalAlpha = 0.35 + 0.45*Math.abs(Math.sin(performance.now()/460));
+  ctx.strokeStyle = "#f0c246"; ctx.lineWidth = 2; ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(x+m, y+m+L);            ctx.lineTo(x+m, y+m);            ctx.lineTo(x+m+L, y+m);
+  ctx.moveTo(x+TILE-m-L, y+m);       ctx.lineTo(x+TILE-m, y+m);       ctx.lineTo(x+TILE-m, y+m+L);
+  ctx.moveTo(x+m, y+TILE-m-L);       ctx.lineTo(x+m, y+TILE-m);       ctx.lineTo(x+m+L, y+TILE-m);
+  ctx.moveTo(x+TILE-m-L, y+TILE-m);  ctx.lineTo(x+TILE-m, y+TILE-m);  ctx.lineTo(x+TILE-m, y+TILE-m-L);
+  ctx.stroke();
+  ctx.restore();
 }
 function drawDrops(){
   ctx.textAlign="center"; ctx.textBaseline="middle";
@@ -2441,7 +2462,7 @@ function tick(dt){
   if(!G.allDown && G.foes.length && !G.foes.some(f=>f.alive)){
     G.allDown = true;
     cue(G.exit.open ? "Patrol down \u2014 reach the exit"
-                    : "Patrol down \u2014 find the exit");
+                    : "Patrol down \u2014 exit marked, dig it out");
     Sound.reveal();
     syncHud();
   }

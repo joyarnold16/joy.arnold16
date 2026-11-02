@@ -96,6 +96,29 @@ furthest-progress checkpoint. `dailyStreak` counts consecutive days with a
 finished daily and is what the title card leads with, since it is the one
 number that rewards coming back tomorrow.
 
+## Arena density
+
+Sector 1 used to generate 273 tiles with 42 destructible objects and two
+drones - 74% bare floor. That reads as deserted rather than open: most of a
+first session went on walking across nothing, and an arena you can cross
+without being threatened is long rather than tense.
+
+The 0.16 starting density was set in response to a report of jank that turned
+out to be the FX watchdog, fixed separately, so it was an over-correction for
+something density was not causing. It is back to 0.28 (37% filled at sector 1,
+ramping to 50% by sector 40), and the patrol starts at three.
+
+## Finding the exit
+
+The exit hides under a brick among the ten furthest from the spawn - measured
+over generated sectors, about 20 tiles away with six candidates at that depth.
+Nothing said so, so the end of a sector was roughly eighteen seconds of
+breaking rubble at random: a search, not a decision.
+
+`drawSurveyMark` puts corner ticks on the right brick, but only once the
+patrol is down. Stumbling on it early still counts for something; clearing the
+drones and then grinding does not.
+
 ## The opening sector
 
 Sector 1 used to generate at the bottom of the density ramp and open almost
