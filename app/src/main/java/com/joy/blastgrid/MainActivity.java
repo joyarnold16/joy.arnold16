@@ -292,6 +292,14 @@ public class MainActivity extends AppCompatActivity {
     private void requestRewardedRevive() {
         RewardedAd ad = RewardedAdPreloader.pollAd(REWARDED_AD_UNIT_ID);
         if (ad == null) {
+            // Debug: no inventory to show, but still report success so the rest
+            // of the chain - the page's resume path - gets exercised. Release
+            // reports the honest false and the run ends.
+            if (BuildConfig.DEBUG) {
+                Log.d("Ads", "No rewarded ad available; debug build grants the revive anyway");
+                notifyReviveResult(true);
+                return;
+            }
             notifyReviveResult(false);
             return;
         }
@@ -336,6 +344,13 @@ public class MainActivity extends AppCompatActivity {
         // even offer the revive prompt, not after.
         @JavascriptInterface
         public boolean isReviveAvailable() {
+            // Debug builds always offer. The revive chain - prompt, ad, callback
+            // back into the page, resume mid-run - only runs when AdMob actually
+            // has inventory, which on a low-traffic app is seldom, so otherwise
+            // the whole path ships having never run once on a real device.
+            // Release keeps the honest check: never show "watch an ad" and then
+            // have nothing to play.
+            if (BuildConfig.DEBUG) return true;
             // No consent means no preloader was ever started, so there is nothing to offer.
             return adsStarted.get() && RewardedAdPreloader.isAdAvailable(REWARDED_AD_UNIT_ID);
         }

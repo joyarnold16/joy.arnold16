@@ -139,6 +139,20 @@ inside the adaptive-icon safe zone (the centre ~66% of the canvas); anything
 wider gets clipped by a circular mask on some launchers. The monochrome vector
 is the same shape flattened, for themed icons.
 
+## Rewarded revive
+
+Two crew. When both are gone the page asks `AdBridge.isReviveAvailable()` and,
+if it says yes, shows "Watch a short ad to get back up with one crew?" - once
+per run. Watching calls back into `window.blastgrid.onReviveResult(true)` and
+the run continues at one crew; declining ends it.
+
+Release builds only offer it when a rewarded ad is genuinely preloaded:
+showing "watch an ad" and then having nothing to play is worse than simply
+ending the run. That gate also means the whole chain almost never runs on a
+low-traffic app, so **debug builds always offer it and grant it without an
+ad** - otherwise the path would ship having never executed once on a device.
+`BuildConfig.DEBUG` guards both halves, so release behaviour is unchanged.
+
 ## Back button
 
 Back once pauses the run via `window.blastgrid.pause()`. Back twice within two
