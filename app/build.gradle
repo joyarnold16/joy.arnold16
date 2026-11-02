@@ -67,6 +67,14 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
+    buildFeatures {
+        // AGP 8 stopped generating BuildConfig unless asked. MainActivity reads
+        // BuildConfig.DEBUG to decide whether the rewarded revive may be offered
+        // without real ad inventory, so without this the class does not exist
+        // and the build fails at compile.
+        buildConfig true
+    }
+
     packagingOptions {
         resources {
             excludes += ['META-INF/*.version', 'META-INF/*.kotlin_module']
