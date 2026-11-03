@@ -242,6 +242,7 @@
         <div class="stats-row"><i>Drones destroyed</i><b id="cs-drones">0</b></div>
         <div class="stats-row"><i>Blocks destroyed</i><b id="cs-blocks">0</b></div>
         <div class="stats-row"><i>Columns dropped</i><b id="cs-columns">0</b></div>
+        <div class="stats-row"><i>Shove kills</i><b id="cs-shoves">0</b></div>
       </div>
       <button class="cta" id="stats-close">Close</button>
     </div>
@@ -249,7 +250,7 @@
       <h3>Before you start</h3>
       <div class="sub">A few things that aren't obvious</div>
       <div class="hint-tips">
-        <p><b>Push</b> &#8212; walk into a charge you've placed to shove it forward. Line up blasts around corners.</p>
+        <p><b>Push</b> &#8212; walk into a charge you've placed and it slides. Shove one into a drone and the kill scores <b>double</b>. This is the shot nothing else gives you.</p>
         <p><b>Smoke</b> &#8212; it chokes you if you linger in it. Get clear fast.</p>
         <p><b>Detonate</b> &#8212; charges blow on their own, or hit &#9889; to set them off early.</p>
       </div>
@@ -441,7 +442,8 @@ const career = {
   runs:       Store.get("runs",0),
   drones:     Store.get("drones",0),
   blocks:     Store.get("blocks",0),
-  columns:    Store.get("columns",0)
+  columns:    Store.get("columns",0),
+  shoves:     Store.get("shoves",0)
 };
 
 /* ============================================================
@@ -901,7 +903,7 @@ const G = {
   daily:false, seed:0, gen:null,
   stats:null, taken:[]
 };
-function blankStats(){ return { drones:0, blocks:0, columns:0, bestCombo:0, sectors:0, clean:0 }; }
+function blankStats(){ return { drones:0, blocks:0, columns:0, bestCombo:0, sectors:0, clean:0, shoves:0 }; }
 function addScore(n){
   const mult = (G.player && G.player.perks.hazard) ? 1.5 : 1;
   G.score += Math.round(n * mult);
@@ -921,6 +923,7 @@ function buildLevel(){
   const N = COLS*ROWS;
   G.grid=new Uint8Array(N); G.colHp=new Uint8Array(N);
   G.scorch=new Float32Array(N); G.fire=new Float32Array(N);
+  G.fireShoved=new Uint8Array(N);   // provenance: was this fire from a shoved charge
   G.danger=new Uint8Array(N); G.rubble=new Float32Array(N);
   G.burn=new Float32Array(N); G.burning=new Set(); G.density=new Float32Array(N);
   G.brickColor=new Uint8Array(N);
@@ -1265,7 +1268,7 @@ function updatePlayer(dt){
       if(p.pushDir && p.pushDir[0]===dx && p.pushDir[1]===dy) p.push += dt;
       else { p.pushDir=[dx,dy]; p.push=0; }
       if(p.push >= (p.perks.boots ? 0 : KICK_HOLD)){
-        b.slide = true; b.sdx = dx; b.sdy = dy;
+        b.slide = true; b.sdx = dx; b.sdy = dy; b.shoved = true;
         b.px = b.cx*TILE+TILE/2; b.py = b.cy*TILE+TILE/2;
         p.push = 0; Sound.kick();
       }
@@ -1361,7 +1364,7 @@ function dropBomb(){
   if(live.length >= p.maxBombs) return;
   G.bombs.push({ cx:c[0], cy:c[1], px:c[0]*TILE+TILE/2, py:c[1]*TILE+TILE/2,
                  t: p.perks.remote ? 7.5 : FUSE, range:p.range, dead:false, ticked:0,
-                 slide:false, sdx:0, sdy:0 });
+                 slide:false, sdx:0, sdy:0, shoved:false });
   Sound.place(); syncHud();
 }
 
@@ -1443,7 +1446,7 @@ function detonate(bomb, depth){
   G.shake = reduceMotion ? 0 : Math.min(15, 9+(depth||0)*2);
   G.flash = 0.16;
   addLight(ox, oy, 190, 1.5, 0.5, "warm");
-  lightCell(bomb.cx, bomb.cy, "core");
+  lightCell(bomb.cx, bomb.cy, "core", bomb.shoved);
   shrapnel(bomb.cx, bomb.cy, ["#5a5450","#4a443f","#77706a"], 10, 190);
   blastPush(ox, oy, 150 + bomb.range*40, TILE*(bomb.range+1.2));
 
@@ -1469,11 +1472,11 @@ function detonate(bomb, depth){
           syncHud();
         }
         else if(Math.random() < (G.player.perks.scav ? 0.52 : 0.3)) spawnDrop(x,y);
-        lightCell(x,y,"tip");
+        lightCell(x,y,"tip",bomb.shoved);
         break;
       }
-      if(t === FLAM){ ignite(x,y); lightCell(x,y,"tip"); break; }
-      lightCell(x,y, i===bomb.range ? "tip" : "arm");
+      if(t === FLAM){ ignite(x,y); lightCell(x,y,"tip",bomb.shoved); break; }
+      lightCell(x,y, i===bomb.range ? "tip" : "arm", bomb.shoved);
       const chain = bombAt(x,y);
       if(chain) detonate(chain,(depth||0)+1);
     }
@@ -1520,8 +1523,13 @@ function updateBurning(dt){
   }
 }
 
-function lightCell(x,y,kind){
+function lightCell(x,y,kind,shoved){
   G.fire[idx(x,y)] = FIRE_LIFE;
+  // Shoving a live charge across the grid is the one thing this does that a
+  // plain Bomberman clone does not, and until now the game neither taught it
+  // nor paid for it. Fire remembers where it came from so a kill made that
+  // way can be called out and scored differently.
+  G.fireShoved[idx(x,y)] = shoved ? 1 : 0;
   G.scorch[idx(x,y)] = Math.min(1, G.scorch[idx(x,y)]+0.55);
   G.flames.push({ x:x, y:y, t:FIRE_LIFE, kind:kind, seed:Math.random()*99 });
 }
@@ -1684,15 +1692,26 @@ function updateFoes(dt){
     }
 
     const c = cellOf(f);
-    if(G.fire[idx(c[0],c[1])] > 0){
+    const fi = idx(c[0],c[1]);
+    if(G.fire[fi] > 0){
       f.alive = false;
       G.combo++; G.comboT = COMBO_WINDOW;
       G.comboFlash = 0.5;
       G.stats.drones++;
       if(G.combo > G.stats.bestCombo) G.stats.bestCombo = G.combo;
-      const worth = SCORE[f.kind]*Math.pow(2,G.combo-1);
+      // Double for a charge you shoved into it. Delivering a blast somewhere
+      // you could not safely stand is the hardest thing the controls allow,
+      // and paying for it is how the mechanic gets taught - a player who
+      // lands one once will go looking for the next.
+      const shoved = G.fireShoved[fi] === 1;
+      const worth = SCORE[f.kind]*Math.pow(2,G.combo-1)*(shoved?2:1);
       addScore(worth);
-      pop(f.x+f.w/2, f.y, "+"+worth, "#f0c246");
+      if(shoved){
+        G.stats.shoves++;
+        pop(f.x+f.w/2, f.y, "SHOVE +"+worth, "#9ecbff");
+      } else {
+        pop(f.x+f.w/2, f.y, "+"+worth, "#f0c246");
+      }
       killDrone(f);
       continue;
     }
@@ -1774,7 +1793,7 @@ function loseCrew(){
     finishRun();
     return;
   }
-  G.bombs=[]; G.flames=[]; G.fire.fill(0);
+  G.bombs=[]; G.flames=[]; G.fire.fill(0); G.fireShoved.fill(0);
   resetPlayer();
 }
 
@@ -1796,12 +1815,14 @@ function finishRun(){
   career.drones    += s.drones;
   career.blocks    += s.blocks;
   career.columns   += s.columns;
+  career.shoves    += (s.shoves || 0);
   Store.set("best", career.best);
   Store.set("bestSector", career.bestSector);
   Store.set("bestChain", career.bestChain);
   Store.set("drones", career.drones);
   Store.set("blocks", career.blocks);
   Store.set("columns", career.columns);
+  Store.set("shoves", career.shoves);
 
   // A finished daily rolls the day over once: today's best starts fresh, and
   // the streak counts consecutive days with a finished daily. Played twice in
@@ -1831,6 +1852,7 @@ function finishRun(){
     G.score.toLocaleString() + " points \u00B7 " + line + "\n" +
     "Sector " + G.level + " \u00B7 " + s.drones + " drones \u00B7 " + s.blocks + " blocks \u00B7 " +
     s.columns + " columns \u00B7 best chain \u00D7" + Math.max(1,s.bestCombo) +
+    (s.shoves ? " \u00B7 " + s.shoves + " shove kill" + (s.shoves===1?"":"s") : "") +
     (G.taken.length ? "\nKit: " + G.taken.join(", ") : ""),
     "Run it back", false);
 
@@ -1851,7 +1873,7 @@ function onReviveResult(earned){
   if(earned){
     G.reviveUsed = true;
     G.lives = 1;
-    G.bombs=[]; G.flames=[]; G.fire.fill(0);
+    G.bombs=[]; G.flames=[]; G.fire.fill(0); G.fireShoved.fill(0);
     resetPlayer();
     G.mode = "play"; last = 0; acc = 0;
   } else {
@@ -2606,6 +2628,7 @@ function showStats(){
     document.getElementById("cs-drones").textContent = career.drones.toLocaleString();
     document.getElementById("cs-blocks").textContent = career.blocks.toLocaleString();
     document.getElementById("cs-columns").textContent = career.columns.toLocaleString();
+    document.getElementById("cs-shoves").textContent = career.shoves.toLocaleString();
   }
   statsOv.hidden = false;
 }

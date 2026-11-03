@@ -96,6 +96,19 @@ furthest-progress checkpoint. `dailyStreak` counts consecutive days with a
 finished daily and is what the title card leads with, since it is the one
 number that rewards coming back tomorrow.
 
+## The shove
+
+Walking into a charge you have placed makes it slide (`KICK_HOLD`, or
+instantly with Steel Toes). It is the one thing here that a plain Bomberman
+clone does not do - it delivers a blast somewhere you could not safely stand -
+and the game neither taught it nor paid for it, so most players never found it.
+
+A kill made with a shoved charge now **scores double** and is called out as
+`SHOVE +n` in blue rather than the usual amber, and it accumulates as a career
+stat. `G.fireShoved` is a parallel grid to `G.fire` carrying the provenance:
+`lightCell` marks it from `bomb.shoved`, and the drone-death check reads it.
+The doubling stacks with the chain multiplier rather than replacing it.
+
 ## Arena density
 
 Sector 1 used to generate 273 tiles with 42 destructible objects and two
