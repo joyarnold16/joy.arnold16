@@ -1,0 +1,33 @@
+# Unity generates these; none of it belongs in the repo.
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+/[Rr]ecordings/
+
+# Solution and project files are regenerated from the asmdefs on open.
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+/.vs/
+/.idea/
+*.apk
+*.aab
+*.unitypackage
+sysinfo.txt
+crashlytics-build.properties
