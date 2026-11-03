@@ -29,15 +29,22 @@ One difference worth knowing about: JS `Array.sort` is stable and
 spawn an unstable sort could choose a different exit. `LevelGen` tie-breaks on
 insertion order to match.
 
-## Setting it up
+## Opening it
 
-1. Unity Hub -> **New project** -> **Universal 2D** -> editor 6000.3.26f1.
-2. Close the editor once it has created the project.
-3. Copy `Assets/Scripts` and `Assets/Tests` from here into the new project's
-   `Assets/` folder.
-4. Open the project and let it compile.
-5. **Window -> General -> Test Runner -> EditMode -> Run All.**
+This folder is already a Unity project - `ProjectSettings/ProjectVersion.txt`
+pins it to 6000.3.26f1, and Unity fills in the rest (Library, packages,
+default settings) the first time it opens. There is nothing to create and
+nothing to copy.
+
+1. Unity Hub -> **Add** -> **Add project from disk** -> pick this `unity`
+   folder.
+2. Open it. First open takes a few minutes while Unity imports.
+3. **Window -> General -> Test Runner -> EditMode -> Run All.**
 
 Everything green means the port compiles and behaves like the web build, and
 the rendering layer can be built on top. Anything red is a defect in the port,
 not in the game.
+
+If Test Runner is missing from the Window menu, the Test Framework package did
+not come in by default: **Window -> Package Manager -> Unity Registry ->
+Test Framework -> Install**.
