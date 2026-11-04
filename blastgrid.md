@@ -80,8 +80,15 @@ again without looking at what the arena actually contains.
 
 **The shove is the game's identity.** Walking into a live charge makes it
 slide; a kill made that way scores double and is called out as `SHOVE +n`.
-It is the only thing here a plain Bomberman clone does not do. Do not
-flatten it into an ordinary kill.
+
+A previous version of this note claimed the sliding itself was original.
+It is not — Bomberman has had a bomb kick since 1993, and the constants
+here are still called `KICK_HOLD` and `KICK_SPEED`. What is specific to
+this game is what was built *around* it: the doubled score, the callout,
+the separate career counter, and `G.fireShoved`, which exists purely so a
+kill can be attributed to a shoved charge. In Bomberman the kick is a
+convenience; here it is the rewarded move. Do not flatten it into an
+ordinary kill, and do not re-describe it as a novel mechanic.
 
 **Portrait lock.** `android:screenOrientation="portrait"`. This excludes some
 landscape-only tablets and Android Auto — that trade was made knowingly. The
@@ -197,6 +204,24 @@ Two things follow from it:
 `unity/UI-prototype/hud.html` is the HUD built to that direction, rendered to
 `hud.png`. It is landscape, pending that decision.
 
+**What was decided instead (v2.0).** The direction was taken; the camera was
+not. Isometric occludes: a tall pillar hides what is behind it, and this game
+needs the whole blast cross and every drone legible in one glance without
+moving a camera. So the palette, the materials and the lighting were applied
+to the existing top-down board in plain canvas — raised bevelled tiles, a cool
+slate floor so the warm bricks read as colour, softer two-pass contact
+shadows, a lifted ambient and a halved vignette, and a blast with a baked
+fireball and a shockwave ring over a tile-aligned core.
+
+That last point is load-bearing: the square under the glow is what the player
+reads as "this tile kills". A purely round blast was tried and looked better
+in isolation while being measurably harder to judge. **Do not remove the
+tile-aligned core.**
+
+Because none of it is isometric, portrait survives and the store screenshots
+stand. Measured headless on a phone viewport, the new art costs about 1ms a
+frame with FX on and nothing measurable with FX off.
+
 ## Monetisation, all of it already done
 
 Nothing here needs setting up again:
@@ -227,7 +252,11 @@ anything is misconfigured.
 
 Live on Play: **versionCode 8 / 1.7**.
 In the repo and not yet shipped: density and patrol changes, the exit survey
-mark, the shove reward, the debug revive path — all built and tested as debug
-APKs, bumped to **versionCode 10 / 1.9**.
+mark, the shove reward, the debug revive path, and the v2.0 art pass — all
+built and tested as debug APKs, bumped to **versionCode 11 / 2.0**.
+
+Next planned, not started: a score leaderboard on the daily run through Google
+Play Games Services. The seeded grid it needs already exists; the point is to
+give the game a reason to be opened tomorrow, which it currently has none of.
 
 The Unity port has the level generator and its tests, and nothing else yet.

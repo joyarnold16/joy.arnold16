@@ -176,8 +176,10 @@
     position:fixed;z-index:5;
     right:calc(20px + env(safe-area-inset-right));bottom:calc(20px + env(safe-area-inset-bottom));
     width:calc(88px * var(--ui));height:calc(88px * var(--ui));border-radius:50%;
-    background:repeating-linear-gradient(45deg,#f0c246 0 10px,#17150e 10px 20px);
-    color:#17150e;font:inherit;font-weight:700;font-size:calc(10px * var(--ui));letter-spacing:.14em;border:0;
+    background:
+      radial-gradient(circle at 50% 50%, #17150e 0 calc(25px * var(--ui)), rgba(0,0,0,0) calc(25px * var(--ui))),
+      repeating-linear-gradient(45deg,#f0c246 0 10px,#17150e 10px 20px);
+    color:#f0c246;font:inherit;font-weight:700;font-size:calc(10px * var(--ui));letter-spacing:.14em;border:0;
     display:flex;align-items:center;justify-content:center;touch-action:none;cursor:pointer;
     box-shadow:inset 0 0 0 calc(11px * var(--ui)) #f0c246;
     transition:filter .1s ease,transform .1s ease;
@@ -573,6 +575,18 @@ const PUFF = (function(){
   return c;
 })();
 
+const FIREBALL = (function(){
+  const s=128, c=makeCanvas(s,s), x=c.getContext("2d");
+  const gr = x.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);
+  gr.addColorStop(0,   "rgba(255,255,248,1)");
+  gr.addColorStop(0.28,"rgba(255,226,150,.92)");
+  gr.addColorStop(0.58,"rgba(255,138,36,.78)");
+  gr.addColorStop(0.85,"rgba(201,48,15,.42)");
+  gr.addColorStop(1,   "rgba(140,24,8,0)");
+  x.fillStyle=gr; x.fillRect(0,0,s,s);
+  return c;
+})();
+
 function speckle(x,w,h,n,cols){
   for(let i=0;i<n;i++){
     x.fillStyle = cols[(Math.random()*cols.length)|0];
@@ -583,19 +597,20 @@ function speckle(x,w,h,n,cols){
 // three variants of each material so no two blocks are identical
 function bakeColumn(){
   const c = makeCanvas(TILE,TILE), x = c.getContext("2d");
-  x.fillStyle="#54514c"; x.fillRect(0,0,TILE,TILE);
-  x.fillStyle="#6d6961"; x.fillRect(0,0,TILE,TILE-9);
-  x.fillStyle="#7e7a71"; x.fillRect(2,2,TILE-4,4);
-  x.fillStyle="#3c3934"; x.fillRect(0,TILE-9,TILE,9);
-  speckle(x,TILE,TILE-9,150,["rgba(0,0,0,.16)","rgba(255,255,255,.06)","rgba(140,128,110,.14)"]);
-  for(let i=0;i<4;i++){
-    x.fillStyle="rgba(0,0,0,.28)";
-    x.fillRect(4+Math.random()*(TILE-10), 5+Math.random()*(TILE-18), 2+Math.random()*3, 2+Math.random()*2);
+  // A deeper bevel than a cinder block, so "indestructible" reads as
+  // "taller" at a glance without needing a colour the player must learn.
+  bevelTile(x,6,"#6a6f78","#8d939d","#3a3d44","#23252a");
+  x.save(); x.beginPath(); x.rect(6,6,TILE-12,TILE-12); x.clip();
+  speckle(x,TILE,TILE,70,["rgba(0,0,0,.14)","rgba(255,255,255,.06)"]);
+  x.strokeStyle="rgba(190,196,206,.10)"; x.lineWidth=2;
+  for(let i=-TILE;i<TILE*2;i+=13){
+    x.beginPath(); x.moveTo(i,TILE); x.lineTo(i+TILE,0); x.stroke();
   }
-  x.strokeStyle="#8a6a48"; x.lineWidth=2;
-  x.beginPath(); x.moveTo(9,TILE-9); x.lineTo(9,TILE-3); x.stroke();
-  x.strokeStyle="rgba(255,255,255,.08)"; x.lineWidth=1;
-  x.beginPath(); x.moveTo(.5,.5); x.lineTo(TILE-.5,.5); x.stroke();
+  x.restore();
+  x.fillStyle="rgba(20,22,26,.85)"; x.fillRect(TILE/2-5,TILE/2-5,10,10);
+  x.fillStyle="#9aa1ab"; x.fillRect(TILE/2-3,TILE/2-3,6,6);
+  x.fillStyle="rgba(0,0,0,.45)"; x.fillRect(TILE/2-3,TILE/2+1,6,2);
+  edgeGlint(x,".34");
   return c;
 }
 // Lightens (amt>0) or darkens (amt<0) a hex color toward white/black by a
@@ -612,48 +627,74 @@ function shade(hex,amt){
 // smoke matches when it's blown up - kept dusty/desaturated to sit inside
 // the site's grungy palette instead of clashing as neon confetti.
 const BRICK_PALETTE = [
-  { hex:"#c2503f", rgb:"194,80,63"  }, // rust red
-  { hex:"#d98a3d", rgb:"217,138,61" }, // amber orange
-  { hex:"#c9b23e", rgb:"201,178,62" }, // ochre yellow
-  { hex:"#5a9e5a", rgb:"90,158,90"  }, // moss green
-  { hex:"#4a8fae", rgb:"74,143,174" }, // steel blue
-  { hex:"#8a5ea8", rgb:"138,94,168" }  // violet
+  { hex:"#d8503c", rgb:"216,80,60"  }, // rust red
+  { hex:"#e8912f", rgb:"232,145,47" }, // amber orange
+  { hex:"#e4c234", rgb:"228,194,52" }, // ochre yellow
+  { hex:"#58b05c", rgb:"88,176,92"  }, // moss green
+  { hex:"#3f98c4", rgb:"63,152,196" }, // steel blue
+  { hex:"#9a5fc4", rgb:"154,95,196" }  // violet
 ];
+
+/* Draws a tile as a raised slab: a full-tile plinth, a lit bevel facing
+   the light, a dark bevel away from it, and the face on top. Every block
+   in the game goes through this, which is most of why the board reads as
+   objects standing on a floor rather than as a flat tilemap.
+
+   The footprint stays exactly one tile. An extruded top face shifted off
+   the grid would look more three-dimensional and would then disagree with
+   what the player actually collides with, which matters more here than
+   the look does. */
+function bevelTile(x,h,face,lit,dark,plinth){
+  x.fillStyle=plinth; x.fillRect(0,0,TILE,TILE);
+  x.beginPath();
+  x.moveTo(0,TILE); x.lineTo(0,0); x.lineTo(TILE,0);
+  x.lineTo(TILE-h,h); x.lineTo(h,h); x.lineTo(h,TILE-h);
+  x.closePath(); x.fillStyle=lit; x.fill();
+  x.beginPath();
+  x.moveTo(TILE,0); x.lineTo(TILE,TILE); x.lineTo(0,TILE);
+  x.lineTo(h,TILE-h); x.lineTo(TILE-h,TILE-h); x.lineTo(TILE-h,h);
+  x.closePath(); x.fillStyle=dark; x.fill();
+  x.fillStyle=face; x.fillRect(h,h,TILE-h*2,TILE-h*2);
+}
+// The glint along the lit edge. Small, but it is what stops a bevel from
+// reading as a painted border.
+function edgeGlint(x,a){
+  x.strokeStyle="rgba(255,255,255,"+a+")"; x.lineWidth=1.5;
+  x.beginPath(); x.moveTo(1,TILE-2); x.lineTo(1,1); x.lineTo(TILE-2,1); x.stroke();
+}
 function bakeCinder(base){
   base = base || "#736a5f";
   const c = makeCanvas(TILE,TILE), x = c.getContext("2d");
-  x.fillStyle=base; x.fillRect(1,1,TILE-2,TILE-2);
-  x.fillStyle=shade(base,0.18); x.fillRect(1,1,TILE-2,TILE/2-2);
-  x.fillStyle=shade(base,-0.22); x.fillRect(1,TILE-8,TILE-2,7);
-  speckle(x,TILE,TILE,130,["rgba(0,0,0,.14)","rgba(255,255,255,.05)","rgba(150,138,118,.12)"]);
-  x.fillStyle="rgba(0,0,0,.34)";
-  x.fillRect(1,TILE/2-1,TILE-2,2);
+  bevelTile(x,4,base,shade(base,0.34),shade(base,-0.42),shade(base,-0.55));
+  // Courses are clipped to the face, so the bevel stays a clean edge
+  // instead of having mortar lines run off the side of the slab.
+  x.save(); x.beginPath(); x.rect(4,4,TILE-8,TILE-8); x.clip();
+  x.fillStyle="rgba(0,0,0,.26)";
+  x.fillRect(4,TILE/2-1,TILE-8,2);
   x.fillRect(TILE/2-1,4,2,TILE/2-5);
-  x.fillRect(TILE/4-1,TILE/2+2,2,TILE/2-7);
-  x.fillRect(TILE*0.75-1,TILE/2+2,2,TILE/2-7);
-  x.fillStyle="rgba(0,0,0,.22)";
-  x.fillRect(6,6,8,7); x.fillRect(TILE-14,6,8,7);
-  x.fillStyle="rgba(255,255,255,.07)"; x.fillRect(1,1,TILE-2,2);
+  x.fillRect(TILE/4-1,TILE/2+1,2,TILE/2-5);
+  x.fillRect(TILE*0.75-1,TILE/2+1,2,TILE/2-5);
+  speckle(x,TILE,TILE,90,["rgba(0,0,0,.10)","rgba(255,255,255,.07)"]);
+  x.restore();
+  edgeGlint(x,".30");
   return c;
 }
 function bakeCrate(){
   const c = makeCanvas(TILE,TILE), x = c.getContext("2d");
-  x.fillStyle="#7a5c35"; x.fillRect(2,2,TILE-4,TILE-4);
-  // plank grain
+  bevelTile(x,4,"#9a7038","#b98a45","#5d4321","#3b2a15");
+  x.save(); x.beginPath(); x.rect(4,4,TILE-8,TILE-8); x.clip();
   for(let i=0;i<4;i++){
-    const y = 3 + i*9;
-    x.fillStyle = i%2 ? "#8a6a3d" : "#6d5230";
-    x.fillRect(3, y, TILE-6, 8);
-    x.fillStyle = "rgba(0,0,0,.22)"; x.fillRect(3, y+7, TILE-6, 1);
-    for(let g=0;g<5;g++){
-      x.fillStyle = "rgba(0,0,0,.13)";
-      x.fillRect(4+Math.random()*(TILE-10), y+1+Math.random()*5, 3+Math.random()*7, 1);
+    const y = 4 + i*8;
+    if(i%2){ x.fillStyle="rgba(0,0,0,.14)"; x.fillRect(4,y,TILE-8,8); }
+    x.fillStyle="rgba(0,0,0,.30)"; x.fillRect(4,y+7,TILE-8,1);
+    for(let g=0;g<4;g++){
+      x.fillStyle="rgba(0,0,0,.12)";
+      x.fillRect(5+Math.random()*(TILE-12), y+1+Math.random()*5, 3+Math.random()*7, 1);
     }
   }
-  x.fillStyle="rgba(0,0,0,.3)"; x.fillRect(TILE/2-1,2,2,TILE-4);
-  x.strokeStyle="#4a3a22"; x.lineWidth=2; x.strokeRect(3,3,TILE-6,TILE-6);
-  x.fillStyle="#9a9a92"; // banding strap
-  x.fillRect(2,TILE/2-2,TILE-4,3);
+  x.fillStyle="rgba(190,190,180,.5)"; x.fillRect(4,TILE/2-2,TILE-8,3); // banding strap
+  x.restore();
+  edgeGlint(x,".26");
   return c;
 }
 const COLUMNS = [bakeColumn(),bakeColumn(),bakeColumn()];
@@ -664,18 +705,21 @@ const variant = (x,y,n) => (x*7 + y*13 + x*y) % n;
 
 const FLOOR = (function(){
   const c = makeCanvas(W,H), x = c.getContext("2d");
-  x.fillStyle="#3b3934"; x.fillRect(0,0,W,H);
-  speckle(x,W,H,9000,["rgba(0,0,0,.16)","rgba(255,255,255,.05)","rgba(120,110,95,.14)"]);
+  x.fillStyle="#2b313a"; x.fillRect(0,0,W,H);
+  speckle(x,W,H,9000,["rgba(0,0,0,.18)","rgba(255,255,255,.04)","rgba(110,130,160,.10)"]);
   for(let i=0;i<70;i++){
     const px=Math.random()*W, py=Math.random()*H, r=14+Math.random()*54;
     const gr=x.createRadialGradient(px,py,0,px,py,r);
-    gr.addColorStop(0,"rgba(22,20,18,.16)"); gr.addColorStop(1,"rgba(22,20,18,0)");
+    gr.addColorStop(0,"rgba(12,14,19,.20)"); gr.addColorStop(1,"rgba(12,14,19,0)");
     x.fillStyle=gr; x.beginPath(); x.arc(px,py,r,0,Math.PI*2); x.fill();
   }
-  x.strokeStyle="rgba(0,0,0,.32)"; x.lineWidth=1;
-  for(let i=1;i<COLS;i++){ x.beginPath(); x.moveTo(i*TILE+.5,0); x.lineTo(i*TILE+.5,H); x.stroke(); }
-  for(let i=1;i<ROWS;i++){ x.beginPath(); x.moveTo(0,i*TILE+.5); x.lineTo(W,i*TILE+.5); x.stroke(); }
-  x.strokeStyle="rgba(255,255,255,.045)";
+  // A dark groove with a lit lip below it, so the floor has a surface
+  // rather than a drawn-on grid.
+  x.strokeStyle="rgba(0,0,0,.40)"; x.lineWidth=2;
+  for(let i=1;i<COLS;i++){ x.beginPath(); x.moveTo(i*TILE,0); x.lineTo(i*TILE,H); x.stroke(); }
+  for(let i=1;i<ROWS;i++){ x.beginPath(); x.moveTo(0,i*TILE); x.lineTo(W,i*TILE); x.stroke(); }
+  x.lineWidth=1;
+  x.strokeStyle="rgba(150,175,205,.10)";
   for(let i=1;i<COLS;i++){ x.beginPath(); x.moveTo(i*TILE+1.5,0); x.lineTo(i*TILE+1.5,H); x.stroke(); }
   for(let i=1;i<ROWS;i++){ x.beginPath(); x.moveTo(0,i*TILE+1.5); x.lineTo(W,i*TILE+1.5); x.stroke(); }
   return c;
@@ -892,7 +936,7 @@ const G = {
   mode:"title",
   grid:null, colHp:null, scorch:null, fire:null, danger:null, rubble:null,
   burn:null, burning:null, density:null,
-  bombs:[], flames:[], drops:[], foes:[], bits:[], smoke:[], pops:[], lights:[], decals:[],
+  bombs:[], flames:[], drops:[], foes:[], bits:[], smoke:[], pops:[], lights:[], decals:[], waves:[],
   exit:null, player:null,
   level:1, lives:2, score:0, best:0,
   timeLeft:LEVEL_TIME, panic:false,
@@ -974,7 +1018,7 @@ function buildLevel(){
     }
   }
 
-  G.bombs=[]; G.flames=[]; G.drops=[]; G.foes=[]; G.bits=[]; G.smoke=[]; G.pops=[]; G.lights=[]; G.decals=[];
+  G.bombs=[]; G.flames=[]; G.drops=[]; G.foes=[]; G.bits=[]; G.smoke=[]; G.pops=[]; G.lights=[]; G.decals=[]; G.waves=[];
   G.allDown=false; G.cueText=""; G.cueT=0;
   G.dropSpawned = false;   // only one reward pickup allowed per sector
 
@@ -1446,6 +1490,7 @@ function detonate(bomb, depth){
   G.shake = reduceMotion ? 0 : Math.min(15, 9+(depth||0)*2);
   G.flash = 0.16;
   addLight(ox, oy, 190, 1.5, 0.5, "warm");
+  addWave(ox, oy, TILE*(bomb.range+0.9));
   lightCell(bomb.cx, bomb.cy, "core", bomb.shoved);
   shrapnel(bomb.cx, bomb.cy, ["#5a5450","#4a443f","#77706a"], 10, 190);
   blastPush(ox, oy, 150 + bomb.range*40, TILE*(bomb.range+1.2));
@@ -1912,6 +1957,7 @@ function smokePuff(cx,cy,tint,alpha,life){
 function smokeBurst(cx,cy){ for(let i=0;i<5;i++) smokePuff(cx,cy,"150,143,133",0.32,2.2); }
 function dustAt(cx,cy){ for(let i=0;i<4;i++) smokePuff(cx,cy,"196,186,170",0.26,1.1); }
 function addLight(x,y,r,i,life,tint){ if(G.fx) G.lights.push({x:x,y:y,r:r,i:i,life:life,max:life,tint:tint}); }
+function addWave(x,y,r){ if(G.fx && !reduceMotion && G.waves.length<14) G.waves.push({x:x,y:y,r:r,life:0.34,max:0.34}); }
 function pop(x,y,text,color){ G.pops.push({x:x,y:y,text:text,color:color,t:0.9}); }
 
 function updateParticles(dt){
@@ -1943,6 +1989,8 @@ function updateParticles(dt){
 
   for(const l of G.lights) l.life -= dt;
   G.lights = G.lights.filter(l=>l.life>0);
+  for(const w of G.waves) w.life -= dt;
+  G.waves = G.waves.filter(w=>w.life>0);
   for(const p of G.pops){ p.t -= dt; p.y -= 26*dt; }
   G.pops = G.pops.filter(p=>p.t>0);
 }
@@ -1957,7 +2005,7 @@ function draw(){
   ctx.drawImage(FLOOR,0,0,W,H);
   drawDecals(); drawScorch(); drawRubble(); drawExit(); drawShadows();
   drawDrops(); drawBlocks(); drawSurveyMark(); drawBombs(); drawFoes(); drawPlayer();
-  drawFire(); drawBits();
+  drawFire(); drawWaves(); drawBits();
   if(G.fx) drawSmoke();
 
   ctx.restore();
@@ -1969,8 +2017,8 @@ function draw(){
   drawCue();
   drawChoke();
 
-  const vg = ctx.createRadialGradient(W/2,H/2,H*0.3,W/2,H/2,H*0.9);
-  vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,"rgba(0,0,0,.62)");
+  const vg = ctx.createRadialGradient(W/2,H/2,H*0.42,W/2,H/2,H*0.95);
+  vg.addColorStop(0,"rgba(0,0,0,0)"); vg.addColorStop(1,"rgba(0,0,0,.38)");
   ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
 
   if(G.mode==="intro"||G.mode==="clear") drawCard();
@@ -1980,7 +2028,7 @@ function draw(){
 function applyLighting(){
   lctx.setTransform(1,0,0,1,0,0);
   lctx.globalCompositeOperation="source-over";
-  lctx.fillStyle="#6f6a63"; lctx.fillRect(0,0,LW,LH);
+  lctx.fillStyle="#95918a"; lctx.fillRect(0,0,LW,LH);
   lctx.globalCompositeOperation="lighter";
   const S=0.5, p=G.player;
   if(p){
@@ -2046,21 +2094,24 @@ function drawRubble(){
   }
 }
 function drawShadows(){
-  ctx.fillStyle="rgba(0,0,0,.42)";
-  for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
-    const t=G.grid[idx(x,y)];
-    if(t===EMPTY) continue;
-    const h = t===SOLID?13:9;
-    ctx.beginPath();
-    ctx.moveTo(x*TILE,y*TILE+TILE);
-    ctx.lineTo(x*TILE+LX*h,y*TILE+TILE+LY*h);
-    ctx.lineTo(x*TILE+TILE+LX*h,y*TILE+TILE+LY*h);
-    ctx.lineTo(x*TILE+TILE+LX*h,y*TILE+LY*h);
-    ctx.lineTo(x*TILE+TILE,y*TILE);
-    ctx.lineTo(x*TILE+TILE,y*TILE+TILE);
-    ctx.closePath(); ctx.fill();
+  for(const pass of SHADOW_PASSES){
+    ctx.fillStyle = pass.fill;
+    for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
+      const t=G.grid[idx(x,y)];
+      if(t===EMPTY) continue;
+      const h = (t===SOLID?16:11) * pass.k;
+      ctx.beginPath();
+      ctx.moveTo(x*TILE,y*TILE+TILE);
+      ctx.lineTo(x*TILE+LX*h,y*TILE+TILE+LY*h);
+      ctx.lineTo(x*TILE+TILE+LX*h,y*TILE+TILE+LY*h);
+      ctx.lineTo(x*TILE+TILE+LX*h,y*TILE+LY*h);
+      ctx.lineTo(x*TILE+TILE,y*TILE);
+      ctx.lineTo(x*TILE+TILE,y*TILE+TILE);
+      ctx.closePath(); ctx.fill();
+    }
   }
 }
+const SHADOW_PASSES = [{k:1,fill:"rgba(0,0,0,.30)"},{k:0.55,fill:"rgba(0,0,0,.26)"}];
 function drawExit(){
   if(!G.exit.open) return;
   const x=G.exit.x*TILE, y=G.exit.y*TILE;
@@ -2111,9 +2162,11 @@ function drawDrops(){
     const x=d.cx*TILE+TILE/2, y=d.cy*TILE+TILE/2;
     ctx.fillStyle="rgba(0,0,0,.4)";
     ctx.beginPath(); ctx.ellipse(x+3,y+5,12,5,0,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle="#3d4045"; ctx.fillRect(x-11,y-9,22,18);
-    ctx.fillStyle="#565b62"; ctx.fillRect(x-11,y-9,22,5);
-    ctx.fillStyle="#2a2c30"; ctx.fillRect(x-11,y+5,22,4);
+    ctx.fillStyle="#2f343c"; ctx.fillRect(x-11,y-9,22,18);
+    ctx.fillStyle="#4a515b"; ctx.fillRect(x-11,y-9,22,5);
+    ctx.fillStyle="#1d2026"; ctx.fillRect(x-11,y+5,22,4);
+    ctx.strokeStyle="rgba(255,255,255,.22)"; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x-10.5,y+8.5); ctx.lineTo(x-10.5,y-8.5); ctx.lineTo(x+10.5,y-8.5); ctx.stroke();
     const c = d.type==="aid" ? "#7fd88f" : "#f0c246";
     ctx.strokeStyle=c; ctx.lineWidth=1.5; ctx.strokeRect(x-8.5,y-5.5,17,11);
     ctx.fillStyle=c; ctx.font="bold 10px ui-monospace,monospace";
@@ -2167,13 +2220,18 @@ function drawBombs(){
     ctx.save();
     ctx.translate(x,y);
     if(b.slide) ctx.rotate(Math.sin(performance.now()/70)*0.14);
-    ctx.fillStyle="#7a3f2c"; ctx.fillRect(-9,-11,18,21);
-    ctx.fillStyle="#95503a"; ctx.fillRect(-9,-11,18,6);
-    ctx.fillStyle="#2e2a27"; ctx.fillRect(-9,-2,18,4);
+    ctx.fillStyle="#2a2724"; ctx.fillRect(-10,-12,20,23);
+    ctx.fillStyle="#8c4833"; ctx.fillRect(-9,-11,18,21);
+    ctx.fillStyle="#ad6245"; ctx.fillRect(-9,-11,18,6);
+    ctx.fillStyle="#201e1c"; ctx.fillRect(-9,-2,18,4);
     ctx.fillStyle="#f0c246"; ctx.fillRect(-9,5,18,2);
-    ctx.strokeStyle="rgba(0,0,0,.4)"; ctx.lineWidth=1; ctx.strokeRect(-8.5,-10.5,17,20);
-    ctx.fillStyle = Math.sin(urg*urg*80)>0 ? "#ff4a2a" : "#4a2018";
-    ctx.beginPath(); ctx.arc(0,-14,3,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle="rgba(255,255,255,.2)"; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(-8.5,9.5); ctx.lineTo(-8.5,-10.5); ctx.lineTo(8.5,-10.5); ctx.stroke();
+    ctx.fillStyle = Math.sin(urg*urg*80)>0 ? "#ff6a3a" : "#4a2018";
+    ctx.beginPath(); ctx.arc(0,-14,3.4,0,Math.PI*2); ctx.fill();
+    if(Math.sin(urg*urg*80)>0){
+      ctx.fillStyle="#ffe9c0"; ctx.beginPath(); ctx.arc(0,-14,1.5,0,Math.PI*2); ctx.fill();
+    }
     ctx.strokeStyle="#c8c2b6"; ctx.lineWidth=1.5;
     ctx.beginPath(); ctx.moveTo(6,-11); ctx.quadraticCurveTo(15,-16,11,-21); ctx.stroke();
     ctx.restore();
@@ -2185,20 +2243,29 @@ function drawFire(){
     const grow = f.kind==="core"?1:0.9+0.1*(1-k);
     const s=TILE*grow, ins=(TILE-s)/2;
     const x=f.x*TILE+ins, y=f.y*TILE+ins;
-    ctx.globalAlpha=Math.min(1,k*1.7);
-    ctx.fillStyle="#c9300f"; ctx.fillRect(x,y,s,s);
-    ctx.fillStyle="#ff7a1e"; ctx.fillRect(x+s*0.1,y+s*0.1,s*0.8,s*0.8);
-    ctx.fillStyle="#ffbf4d"; ctx.fillRect(x+s*0.22,y+s*0.22,s*0.56,s*0.56);
-    ctx.fillStyle="#fff4d0"; ctx.fillRect(x+s*0.34,y+s*0.34,s*0.32,s*0.32);
-    if(G.fx){
-      for(let i=0;i<3;i++){
-        const t=performance.now()/90+f.seed+i;
-        ctx.fillStyle="rgba(255,214,140,.5)";
-        ctx.fillRect(x+((Math.sin(t)*0.5+0.5)*(s-6))|0, y-3, 5, 4);
-        ctx.fillRect(x+((Math.cos(t*1.3)*0.5+0.5)*(s-6))|0, y+s-1, 5, 4);
-      }
-    }
+    ctx.globalAlpha=Math.min(1,k*1.5);
+    ctx.fillStyle="#d8400f"; ctx.fillRect(x+2,y+2,s-4,s-4);
+    ctx.fillStyle="#ff8a24"; ctx.fillRect(x+6,y+6,s-12,s-12);
     ctx.globalAlpha=1;
+    if(G.fx){
+      const cx=f.x*TILE+TILE/2, cy=f.y*TILE+TILE/2;
+      const r=TILE*0.62*(0.85+k*0.25);
+      ctx.save();
+      ctx.globalCompositeOperation="lighter";
+      ctx.globalAlpha=Math.min(1,k*1.1);
+      ctx.drawImage(FIREBALL,cx-r,cy-r,r*2,r*2);
+      // tongues, so the edge is not a clean circle either
+      for(let i=0;i<5;i++){
+        const a=(i/5)*Math.PI*2 + performance.now()/700 + f.seed;
+        const d=r*(0.64+0.30*Math.abs(Math.sin(performance.now()/120+i*1.7+f.seed)));
+        ctx.fillStyle="rgba(255,196,96,.42)";
+        ctx.beginPath();
+        ctx.arc(cx+Math.cos(a)*d, cy+Math.sin(a)*d, 4.5+2.5*Math.sin(i+f.seed), 0, Math.PI*2);
+        ctx.fill();
+      }
+      ctx.restore();
+      ctx.globalAlpha=1;
+    }
   }
 }
 function drawFoes(){
@@ -2210,9 +2277,9 @@ function drawFoes(){
     ctx.fillStyle="rgba(0,0,0,.4)";
     ctx.beginPath(); ctx.ellipse(x+2,f.y+f.h+2,f.w*0.34,f.w*0.12,0,0,Math.PI*2); ctx.fill();
     ctx.save(); ctx.translate(x,y); ctx.rotate(tilt); ctx.translate(-x,-y);
-    const body = f.kind==="ghost"?"#7e93b5":f.kind==="seek"?"#8e5b46":"#7f7b74";
-    const trim = f.kind==="ghost"?"#a8c4e8":f.kind==="seek"?"#d1543a":"#f0c246";
-    ctx.strokeStyle="rgba(200,205,210,.28)"; ctx.lineWidth=1.5;
+    const body = f.kind==="ghost"?"#93a8ca":f.kind==="seek"?"#a9624a":"#8e8a82";
+    const trim = f.kind==="ghost"?"#bcd6f5":f.kind==="seek"?"#ff5c3a":"#f0c246";
+    ctx.strokeStyle="rgba(200,215,235,.34)"; ctx.lineWidth=1.5;
     for(const s of [[-1,-1],[1,-1],[-1,1],[1,1]]){
       const rx=x+s[0]*f.w*0.36, ry=y+s[1]*f.w*0.30;
       ctx.beginPath(); ctx.arc(rx,ry,6.5,0,Math.PI*2); ctx.stroke();
@@ -2223,13 +2290,14 @@ function drawFoes(){
       ctx.stroke();
       ctx.strokeStyle="rgba(200,205,210,.28)";
     }
-    ctx.fillStyle="#2c2e31"; ctx.fillRect(x-f.w*0.30,y-f.h*0.22,f.w*0.60,f.h*0.44);
+    ctx.fillStyle="#1d1f23"; ctx.fillRect(x-f.w*0.32,y-f.h*0.24,f.w*0.64,f.h*0.48);
     ctx.fillStyle=body;      ctx.fillRect(x-f.w*0.26,y-f.h*0.20,f.w*0.52,f.h*0.32);
-    ctx.fillStyle="rgba(0,0,0,.35)"; ctx.fillRect(x-f.w*0.26,y+f.h*0.06,f.w*0.52,f.h*0.14);
+    ctx.fillStyle=shade(body,0.26); ctx.fillRect(x-f.w*0.26,y-f.h*0.20,f.w*0.52,f.h*0.10);
+    ctx.fillStyle="rgba(0,0,0,.42)"; ctx.fillRect(x-f.w*0.26,y+f.h*0.06,f.w*0.52,f.h*0.14);
     const ex=x+f.dir[0]*5, ey=y+f.dir[1]*4;
-    ctx.fillStyle="#141416"; ctx.beginPath(); ctx.arc(ex,ey,5.5,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle=trim;      ctx.beginPath(); ctx.arc(ex,ey,3,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle="rgba(255,255,255,.7)"; ctx.beginPath(); ctx.arc(ex-1,ey-1,1.1,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="#101013"; ctx.beginPath(); ctx.arc(ex,ey,5.8,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=trim;      ctx.beginPath(); ctx.arc(ex,ey,3.2,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="rgba(255,255,255,.85)"; ctx.beginPath(); ctx.arc(ex-1,ey-1,1.2,0,Math.PI*2); ctx.fill();
     ctx.restore();
     ctx.globalAlpha=1;
   }
@@ -2243,17 +2311,35 @@ function drawPlayer(){
   const x=p.x+p.w/2, y=p.y+p.h/2+bob;
   ctx.fillStyle="rgba(0,0,0,.45)";
   ctx.beginPath(); ctx.ellipse(x+3,p.y+p.h+1,p.w*0.36,p.w*0.13,0,0,Math.PI*2); ctx.fill();
-  ctx.fillStyle="#2f2c28"; ctx.fillRect(x-8,y+4,6,10); ctx.fillRect(x+2,y+4,6,10);
-  ctx.fillStyle="#40453f"; ctx.fillRect(x-9,y-6,18,12);
-  ctx.fillStyle= p.hp<=1 ? "#b8501a" : "#e8641c"; ctx.fillRect(x-9,y-6,18,11);
-  ctx.fillStyle="#f3f0e4"; ctx.fillRect(x-9,y-2,18,2.5);
+  ctx.fillStyle="#242220"; ctx.fillRect(x-8,y+4,6,10); ctx.fillRect(x+2,y+4,6,10);
+  ctx.fillStyle="#2d322c"; ctx.fillRect(x-10,y-7,20,14);
+  ctx.fillStyle= p.hp<=1 ? "#c75a1e" : "#f4731f"; ctx.fillRect(x-9,y-6,18,11);
+  ctx.fillStyle= p.hp<=1 ? "#e07a36" : "#ff9044"; ctx.fillRect(x-9,y-6,18,3);
+  ctx.fillStyle="#f8f5ea"; ctx.fillRect(x-9,y-2,18,2.5);
   ctx.fillStyle="rgba(0,0,0,.25)"; ctx.fillRect(x-1,y-6,1.5,11);
   if(p.hp<=2){ ctx.fillStyle="rgba(120,20,14,.75)"; ctx.fillRect(x+2,y-1,5,4); }
-  ctx.fillStyle="#c9a227"; ctx.beginPath(); ctx.arc(x,y-9,8,Math.PI,0); ctx.fill();
-  ctx.fillStyle="#f0c246"; ctx.beginPath(); ctx.arc(x,y-9,6.5,Math.PI,0); ctx.fill();
+  ctx.fillStyle="#c9a227"; ctx.beginPath(); ctx.arc(x,y-9,8.5,Math.PI,0); ctx.fill();
+  ctx.fillStyle="#f6cc52"; ctx.beginPath(); ctx.arc(x,y-9,6.8,Math.PI,0); ctx.fill();
+  ctx.fillStyle="#fff0bd"; ctx.beginPath(); ctx.arc(x-2,y-11,3.4,Math.PI,0); ctx.fill();
   ctx.fillStyle="#d8ad2c"; ctx.fillRect(x-9+p.face[0]*2,y-9,18,2.5);
   ctx.fillStyle="#fff2c9";
   ctx.beginPath(); ctx.arc(x+p.face[0]*5,y-12+p.face[1],2,0,Math.PI*2); ctx.fill();
+}
+function drawWaves(){
+  if(!G.waves.length) return;
+  ctx.save();
+  ctx.globalCompositeOperation="lighter";
+  for(const w of G.waves){
+    const prog = 1 - w.life/w.max;
+    const fade = 1 - prog;
+    ctx.strokeStyle="rgba(255,236,200,"+(0.55*fade).toFixed(3)+")";
+    ctx.lineWidth = 5*fade + 1.5;
+    ctx.beginPath(); ctx.arc(w.x,w.y,w.r*prog,0,Math.PI*2); ctx.stroke();
+    ctx.strokeStyle="rgba(255,150,60,"+(0.30*fade).toFixed(3)+")";
+    ctx.lineWidth = 11*fade + 2;
+    ctx.beginPath(); ctx.arc(w.x,w.y,w.r*prog*0.82,0,Math.PI*2); ctx.stroke();
+  }
+  ctx.restore();
 }
 function drawBits(){
   for(const b of G.bits){
