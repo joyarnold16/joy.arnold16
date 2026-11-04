@@ -135,6 +135,94 @@ side cannot see it and will duplicate or overwrite it.
 
 ---
 
+## Why any of this is happening
+
+The app is live and healthy by every technical measure, and almost nobody
+plays it. Over 28 days to early November 2026:
+
+    device acquisitions      2   (down 75%)
+    device first opens       1   (down 80%)
+    monthly active devices   6
+
+Earlier, when there was enough traffic to measure a funnel: **23** people saw
+the store listing, **7** tapped install — a 30% click-through, which is good.
+The listing converts. Nobody arrives at it.
+
+The owner's other app, **Nanu ROR: COLREG Trainer**, on the same developer
+account and built with no engine at all, pulls **41 acquisitions, +58%**. The
+difference is not polish. People search "COLREG" because they are studying
+for a maritime exam. Nobody searches "blastgrid".
+
+That distinction has been raised with the owner more than once and they have
+chosen to improve the game anyway. **Do not re-litigate it.** It is their
+call, they know the numbers, and the game is worth improving on its own
+terms. Work on what is asked.
+
+## What has already been tried on the game
+
+All of this is shipped or built, so do not propose it as new:
+
+- **Furthest-progress checkpoint** — "Continue — Sector N", survives death and
+  starting over, only ever moves forward.
+- **Daily run** — seeded from the local date, same grid for everyone, with a
+  day streak. Drone patrol still diverges; the promise is the grid, not the run.
+- **Objective cues** — a one-shot line when the last drone dies, the HUD's
+  drone tile re-purposing itself, and a survey mark on the brick hiding the
+  exit once the patrol is down.
+- **Arena density raised** from the over-corrected 0.16 back to 0.28, patrol
+  from 2 to 3.
+- **Shove reward** — double score and a `SHOVE +n` callout.
+- **Opening pallet pocket** in sector 1, so the first charge spreads.
+
+What has *not* been tried: anything outside the app. No video clips, no
+communities, no paid acquisition, no ASO pass beyond the icon and screenshots.
+
+## Art direction
+
+The owner supplied AI-generated concept art of this game and wants that look:
+isometric demolition site, stylised 3D, warm orange against cool cyan, hazard
+stripes, concrete pillars, wooden pallets, a lit LIFT as the exit, a worker in
+hi-vis with a respirator, small wheeled drones with red scanning lights.
+
+It is a good direction and it keeps the fiction the game already has.
+
+Two things follow from it:
+
+- **It is 3D.** Models, materials, lights. That work is art, not code, and it
+  is the real cost of this port. Asset Store industrial kits are the realistic
+  route.
+- **It is landscape.** The shipped game is portrait-locked. Nobody has decided
+  which wins. Changing to landscape means every store screenshot again.
+
+`unity/UI-prototype/hud.html` is the HUD built to that direction, rendered to
+`hud.png`. It is landscape, pending that decision.
+
+## Monetisation, all of it already done
+
+Nothing here needs setting up again:
+
+- AdMob app and both ad units created, real IDs in the shipped build, test IDs
+  confirmed absent from the AAB.
+- `app-ads.txt` live at `joyarnold16.github.io/app-ads.txt` and verified by
+  AdMob (100% of queries authorised).
+- GDPR/UK consent through the UMP SDK, gating the ads SDK entirely.
+- BillDesk KYC approved, so Play billing is available if in-app purchases are
+  ever added.
+
+Revenue is near zero because the install count is near zero, not because
+anything is misconfigured.
+
+## Decisions nobody has made yet
+
+- **Landscape or portrait.** Blocks the whole visual direction.
+- **Who owns which files**, now that more than one assistant may be working
+  here. Split by directory.
+- **Where the 3D assets come from** — bought, commissioned, or made.
+- **Whether `release.keystore` exists anywhere outside GitHub Secrets.** Asked
+  four times, never answered. Secrets are write-only, so it cannot be read
+  back. Play App Signing makes a loss recoverable via an upload-key reset
+  rather than fatal, but that is a support request and a wait.
+
 ## Current state
 
 Live on Play: **versionCode 8 / 1.7**.
