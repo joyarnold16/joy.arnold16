@@ -1,0 +1,136 @@
+<!doctype html><meta charset="utf-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&display=swap');
+  :root{
+    --plate:#1b1d22; --plate2:#24272d; --steel:#5b626d; --steel-hi:#8a929e;
+    --ink:#f2f4f7; --dim:#9aa2ad;
+    --red:#e8342b; --red-dk:#8e1510; --red-hi:#ff6a52;
+    --cyan:#2fe0e8; --cyan-dk:#0b6f78;
+    --amber:#ffc12b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#0a0c10;
+    font-family:"Barlow Condensed",ui-sans-serif,system-ui;overflow:hidden}
+  /* a stand-in for the 3D scene, so the UI can be judged over something */
+  .scene{position:absolute;inset:0;
+    background:
+      radial-gradient(60% 45% at 78% 24%, rgba(47,224,232,.22), transparent 70%),
+      radial-gradient(50% 40% at 18% 30%, rgba(255,120,40,.20), transparent 70%),
+      radial-gradient(80% 60% at 50% 95%, rgba(0,0,0,.65), transparent 70%),
+      linear-gradient(180deg,#2a2f3a 0%,#3a3f4a 45%,#2c3039 100%);}
+  .scene:after{content:"";position:absolute;inset:0;opacity:.14;
+    background-image:linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px);
+    background-size:92px 92px;transform:perspective(620px) rotateX(52deg) scale(1.9);
+    transform-origin:50% 42%}
+
+  /* ---------- shared plate treatment ---------- */
+  .plate{
+    background:linear-gradient(180deg,var(--plate2),var(--plate));
+    border:2px solid #0c0e12;
+    box-shadow:0 0 0 1px rgba(255,255,255,.07) inset,
+               0 6px 0 #0b0d10, 0 10px 22px rgba(0,0,0,.55);
+  }
+  .slashes{display:inline-flex;gap:3px;transform:skewX(-18deg)}
+  .slashes i{display:block;width:6px;height:17px;background:var(--red);border-radius:1px}
+  .slashes.amber i{background:var(--amber)}
+
+  /* ---------- top left: who and where ---------- */
+  .ident{position:absolute;left:18px;top:16px;padding:8px 18px 9px 14px;
+    border-radius:10px;display:flex;align-items:center;gap:12px}
+  .ident .txt{line-height:1}
+  .ident .game{font-size:15px;letter-spacing:.14em;color:var(--dim);font-weight:700}
+  .ident .sector{font-size:34px;font-weight:800;color:var(--ink);letter-spacing:.02em;
+    margin-top:2px;display:flex;align-items:baseline;gap:9px}
+  .ident .sector b{color:var(--red);font-size:38px;
+    text-shadow:0 0 18px rgba(232,52,43,.65)}
+
+  /* ---------- top centre: the air you have left ---------- */
+  /* Pinned between the two side plates rather than centred on the screen, so a
+     longer score or a wider ident can never slide underneath it. */
+  .air{position:absolute;left:0;right:0;top:18px;margin:0 auto;width:max-content;
+    max-width:calc(100% - 620px);
+    display:flex;align-items:center;gap:12px;padding:8px 16px;border-radius:999px}
+  .air .mask{width:30px;height:30px;border-radius:7px;display:grid;place-items:center;
+    background:rgba(47,224,232,.14);border:1px solid rgba(47,224,232,.45);
+    color:var(--cyan);font-size:17px}
+  .air .label{font-size:17px;font-weight:800;letter-spacing:.17em;color:var(--ink)}
+  .bar{width:250px;height:17px;border-radius:999px;background:#0c0e12;
+    border:2px solid #000;position:relative;overflow:hidden;
+    box-shadow:0 0 0 1px rgba(255,255,255,.07)}
+  .bar .fill{position:absolute;inset:2px;width:74%;border-radius:999px;
+    background:linear-gradient(180deg,#8df2f8,var(--cyan) 55%,#149aa3);
+    box-shadow:0 0 14px rgba(47,224,232,.7)}
+  .bar .fill:after{content:"";position:absolute;inset:0 0 50% 0;border-radius:999px;
+    background:linear-gradient(180deg,rgba(255,255,255,.45),transparent)}
+
+  /* ---------- top right: score and charges ---------- */
+  .readout{position:absolute;right:18px;top:16px;display:flex;align-items:center;
+    gap:14px;padding:9px 18px;border-radius:10px}
+  .readout .k{font-size:16px;letter-spacing:.15em;color:var(--dim);font-weight:700}
+  .readout .v{font-size:30px;font-weight:800;color:var(--amber);letter-spacing:.01em;
+    text-shadow:0 0 16px rgba(255,193,43,.4)}
+  .readout .sep{width:2px;height:28px;background:#0c0e12;
+    box-shadow:1px 0 0 rgba(255,255,255,.07)}
+  .charges{display:flex;align-items:center;gap:7px}
+  .charges .ico{width:28px;height:28px;border-radius:6px;display:grid;place-items:center;
+    background:linear-gradient(180deg,#d0352c,#7d1410);border:1px solid #000;font-size:15px}
+  .charges .x{font-size:25px;font-weight:800;color:var(--ink)}
+
+  /* ---------- bottom left: the stick ---------- */
+  .dpad{position:absolute;left:30px;bottom:28px;width:168px;height:168px;border-radius:50%;
+    background:radial-gradient(circle at 50% 38%,rgba(255,255,255,.17),rgba(255,255,255,.07) 58%,rgba(0,0,0,.28));
+    border:2px solid rgba(255,255,255,.18);backdrop-filter:blur(2px);
+    display:grid;place-items:center}
+  .dpad .nub{width:76px;height:76px;border-radius:50%;
+    background:linear-gradient(180deg,#f4f6f8,#b9c0c9);
+    box-shadow:0 5px 0 #6f767f,0 9px 18px rgba(0,0,0,.5)}
+  .dpad span{position:absolute;color:rgba(255,255,255,.72);font-size:19px}
+  .dpad .u{top:9px}.dpad .d{bottom:9px}.dpad .l{left:12px}.dpad .r{right:12px}
+
+  /* ---------- bottom right: the one button that matters ---------- */
+  .detonate{position:absolute;right:30px;bottom:26px;width:176px;height:176px;border-radius:50%;
+    background:linear-gradient(180deg,var(--red-hi) 0%,var(--red) 38%,var(--red-dk) 100%);
+    border:4px solid #2a0705;
+    box-shadow:0 10px 0 #5e0d09, 0 18px 34px rgba(0,0,0,.6),
+               0 0 42px rgba(232,52,43,.45),
+               inset 0 3px 0 rgba(255,255,255,.35);
+    display:grid;place-items:center;gap:2px;align-content:center}
+  .detonate .burst{font-size:40px;line-height:.9;color:#fff;
+    filter:drop-shadow(0 2px 0 rgba(0,0,0,.35))}
+  .detonate .cap{font-size:25px;font-weight:800;color:#fff;letter-spacing:.09em;
+    text-shadow:0 2px 0 rgba(0,0,0,.42)}
+</style>
+<div class="scene"></div>
+
+<div class="ident plate">
+  <span class="slashes"><i></i><i></i><i></i></span>
+  <span class="txt">
+    <span class="game">NANU BLASTGRID</span>
+    <span class="sector">SECTOR <b>04</b></span>
+  </span>
+</div>
+
+<div class="air plate">
+  <span class="mask"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h16v5a7 7 0 0 1-7 7h-2a7 7 0 0 1-7-7z"/><circle cx="8.5" cy="13" r="2"/><circle cx="15.5" cy="13" r="2"/><path d="M6 8V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/></svg></span>
+  <span class="label">AIR</span>
+  <span class="bar"><span class="fill"></span></span>
+</div>
+
+<div class="readout plate">
+  <span class="k">SCORE</span>
+  <span class="v">18,650</span>
+  <span class="sep"></span>
+  <span class="charges"><span class="ico">&#9632;</span><span class="x">&times;2</span></span>
+</div>
+
+<div class="dpad">
+  <span class="u">&#9650;</span><span class="d">&#9660;</span>
+  <span class="l">&#9664;</span><span class="r">&#9654;</span>
+  <span class="nub"></span>
+</div>
+
+<div class="detonate">
+  <span class="burst"><svg width="46" height="34" viewBox="0 0 48 34" fill="#fff"><path d="M24 0l4.4 9.2L38 5l-3.1 9.6L46 15l-8.4 5.4 6 7.3-10.6-1.3L33 34l-9-5.2L15 34l-.9-7.6L3.5 27.7l6-7.3L1 15l11.1-.4L9 5l9.6 4.2z"/></svg></span>
+  <span class="cap">DETONATE</span>
+</div>
