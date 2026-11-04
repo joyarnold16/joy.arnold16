@@ -229,7 +229,7 @@
     </div>
     <div class="draft" id="revive-ov" hidden>
       <h3>Crew down</h3>
-      <div class="sub">Watch a short ad to get back up with one crew?</div>
+      <div class="sub" id="revive-sub">Watch a short ad to get back up with one crew?</div>
       <button class="cta" id="revive-watch">Watch ad &amp; continue</button>
       <button class="cta ghost" id="revive-skip">End run</button>
     </div>
@@ -277,7 +277,7 @@
       <div class="stat"><b id="s-score">0</b><i>score</i></div>
       <div class="stat"><b id="s-level">1</b><i>sector</i></div>
       <div class="stat" id="w-lives"><b id="s-lives">2</b><i>crew</i></div>
-      <div class="stat" id="w-cond"><b id="s-cond">&#9679;&#9679;&#9679;</b><i>condition</i></div>
+      <div class="stat" id="w-cond"><b id="s-cond">&#9679;&#9679;</b><i>condition</i></div>
       <div class="stat"><b id="s-bombs">1/1</b><i>charges</i></div>
       <div class="stat" id="w-foes"><b id="s-foes">0</b><i id="s-foes-label">drones</i></div>
     </div>
@@ -350,6 +350,10 @@ const COMBO_WINDOW = 1.4;
 const PLAYER_SIZE = TILE*0.64, FOE_SIZE = TILE*0.60;
 const BURN_TIME = 3.2, SPREAD_AT = 2.1;
 const KICK_HOLD = 0.22, KICK_SPEED = 200;
+// Revives a single run may be earned by watching a rewarded ad. Each one
+// still needs an ad to actually be loaded, so this is a ceiling, not a
+// promise - see loseCrew.
+const REVIVE_MAX = 2;
 const SMOKE_CHOKE = 0.55, CHOKE_LIMIT = 3.0;
 const SCORE = { brick:10, crate:15, column:120, pickup:50, drift:100, seek:200, ghost:400, clear:500 };
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -938,7 +942,7 @@ const G = {
   burn:null, burning:null, density:null,
   bombs:[], flames:[], drops:[], foes:[], bits:[], smoke:[], pops:[], lights:[], decals:[], waves:[],
   exit:null, player:null,
-  level:1, lives:2, score:0, best:0,
+  level:1, lives:2, score:0, best:0, revives:0,
   timeLeft:LEVEL_TIME, panic:false,
   shake:0, freeze:0, flash:0, modeT:0, clearStats:null,
   fx:true, dustT:0, crackleT:0,
@@ -1076,11 +1080,11 @@ function newRun(daily){
   career.runs++; Store.set("runs", career.runs);
   G.daily = !!daily;
   G.seed  = daily ? seedOf(dayKey()) : 0;
-  G.level=1; G.lives=2; G.score=0; G.reviveUsed=false;
+  G.level=1; G.lives=2; G.score=0; G.revives=0;
   G.combo=0; G.comboT=0; G.streak=0; G.clean=true;
   G.stats = blankStats(); G.taken = [];
   G.player = { x:0,y:0,w:PLAYER_SIZE,h:PLAYER_SIZE, speed:94, maxBombs:1, range:1,
-               invuln:0, face:[0,1], step:0, hp:3, maxHp:3, vx:0, vy:0,
+               invuln:0, face:[0,1], step:0, hp:2, maxHp:2, vx:0, vy:0,
                choke:0, push:0, pushDir:null, perks:{}, shield:false,
                foot:false, lastStep:0, breathT:0 };
   buildLevel(); resetPlayer(); enterIntro();
@@ -1109,7 +1113,7 @@ function snapshotRun(){
   const p = G.player;
   Store.set("run", {
     level:G.level, lives:G.lives, score:G.score, streak:G.streak,
-    reviveUsed: !!G.reviveUsed,
+    revives: G.revives|0,
     taken: G.taken.slice(),
     stats: G.stats,
     p: { speed:p.speed, maxBombs:p.maxBombs, range:p.range,
@@ -1123,7 +1127,9 @@ function savedRun(){
 function resumeRun(r){
   G.daily=false; G.seed=0;
   G.level=r.level; G.lives=r.lives; G.score=r.score;
-  G.streak=r.streak||0; G.reviveUsed=!!r.reviveUsed;
+  G.streak=r.streak||0;
+  G.revives = (typeof r.revives === "number") ? r.revives
+            : (r.reviveUsed ? 1 : 0);   // checkpoints from builds before REVIVE_MAX
   G.combo=0; G.comboT=0; G.clean=true;
   G.stats = r.stats || blankStats();
   G.taken = r.taken ? r.taken.slice() : [];
@@ -1278,7 +1284,7 @@ function updatePlayer(dt){
 
   const ignore = bombsUnder(p);
   // injury slows you down
-  const eff = p.speed * (p.hp<=1 ? 0.7 : p.hp===2 ? 0.87 : 1);
+  const eff = p.speed * (p.hp<=1 ? 0.7 : p.hp < p.maxHp ? 0.87 : 1);
   const s = eff*dt;
   const x0=p.x, y0=p.y;
 
@@ -1827,10 +1833,10 @@ function loseCrew(){
   G.shake = reduceMotion ? 0 : 16;
   syncHud();
   if(G.lives <= 0){
-    // One offer per run, and only when the native shell actually has a
+    // Capped per run, and only when the native shell actually has a
     // rewarded ad ready - never show "watch an ad" and then have nothing to
     // play, that's worse than just ending the run.
-    if(!G.reviveUsed && window.AdBridge && window.AdBridge.isReviveAvailable
+    if(G.revives < REVIVE_MAX && window.AdBridge && window.AdBridge.isReviveAvailable
        && window.AdBridge.isReviveAvailable()){
       offerRevive();
       return;
@@ -1844,6 +1850,13 @@ function loseCrew(){
 
 function offerRevive(){
   G.mode = "revive";
+  const left = REVIVE_MAX - G.revives;
+  const sub = document.getElementById("revive-sub");
+  if(sub){
+    sub.textContent = left > 1
+      ? "Watch a short ad to get back up with one crew?"
+      : "Watch a short ad to get back up with one crew. This is the last one this run.";
+  }
   reviveOv.hidden = false;
 }
 
@@ -1916,7 +1929,7 @@ function finishRun(){
 function onReviveResult(earned){
   reviveOv.hidden = true;
   if(earned){
-    G.reviveUsed = true;
+    G.revives++;
     G.lives = 1;
     G.bombs=[]; G.flames=[]; G.fire.fill(0); G.fireShoved.fill(0);
     resetPlayer();
@@ -2317,7 +2330,7 @@ function drawPlayer(){
   ctx.fillStyle= p.hp<=1 ? "#e07a36" : "#ff9044"; ctx.fillRect(x-9,y-6,18,3);
   ctx.fillStyle="#f8f5ea"; ctx.fillRect(x-9,y-2,18,2.5);
   ctx.fillStyle="rgba(0,0,0,.25)"; ctx.fillRect(x-1,y-6,1.5,11);
-  if(p.hp<=2){ ctx.fillStyle="rgba(120,20,14,.75)"; ctx.fillRect(x+2,y-1,5,4); }
+  if(p.hp < p.maxHp){ ctx.fillStyle="rgba(120,20,14,.75)"; ctx.fillRect(x+2,y-1,5,4); }
   ctx.fillStyle="#c9a227"; ctx.beginPath(); ctx.arc(x,y-9,8.5,Math.PI,0); ctx.fill();
   ctx.fillStyle="#f6cc52"; ctx.beginPath(); ctx.arc(x,y-9,6.8,Math.PI,0); ctx.fill();
   ctx.fillStyle="#fff0bd"; ctx.beginPath(); ctx.arc(x-2,y-11,3.4,Math.PI,0); ctx.fill();
