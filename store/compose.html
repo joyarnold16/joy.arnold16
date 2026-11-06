@@ -1,0 +1,50 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  html,body{margin:0;background:#000;overflow:hidden}
+  #frame{position:relative;overflow:hidden;background:#0b0a0c}
+  #shot{position:absolute;left:0;top:0;width:100%;display:block}
+  /* The caption sits over the HUD strip, which is the least interesting part
+     of the frame to someone browsing the store, so the board stays whole. */
+  #band{
+    position:absolute;left:0;top:0;width:100%;
+    background:linear-gradient(180deg,#0b0a0c 0%,#0b0a0c 58%,#0b0a0cd9 78%,#0b0a0c00 100%);
+    box-sizing:border-box;
+  }
+  #rule{position:absolute;left:0;height:0;border-top-style:solid;border-top-color:#f0c246}
+  h1{
+    margin:0;color:#f6e3b0;font-family:ui-monospace,"DejaVu Sans Mono",monospace;
+    font-weight:700;letter-spacing:-.01em;line-height:1.12;
+  }
+  h1 em{font-style:normal;color:#ff9a3c}
+  p{margin:0;color:#b9b2a6;font-family:ui-monospace,"DejaVu Sans Mono",monospace;line-height:1.35}
+</style></head><body>
+<div id="frame">
+  <img id="shot">
+  <div id="band"><h1 id="h"></h1><p id="s"></p></div>
+  <div id="rule"></div>
+</div>
+<script>
+window.build = function(o){
+  const f=document.getElementById('frame');
+  f.style.width=o.W+'px'; f.style.height=o.H+'px';
+  document.getElementById('shot').src=o.img;
+  // everything scales off the frame width so one layout serves phone and both tablets
+  const u = o.W/1080;
+  const band=document.getElementById('band');
+  band.style.padding = (62*u)+'px '+(58*u)+'px '+(104*u)+'px';
+  const h=document.getElementById('h');
+  h.innerHTML=o.head;
+  h.style.fontSize=(78*u)+'px';
+  const s=document.getElementById('s');
+  s.textContent=o.sub||'';
+  s.style.fontSize=(34*u)+'px';
+  s.style.marginTop=(18*u)+'px';
+  const r=document.getElementById('rule');
+  r.style.left=(58*u)+'px'; r.style.width=(120*u)+'px';
+  r.style.top=(40*u)+'px'; r.style.borderTopWidth=(7*u)+'px';
+  return new Promise(res=>{
+    const im=document.getElementById('shot');
+    if(im.complete) res(true); else im.onload=()=>res(true);
+  });
+};
+</script></body></html>

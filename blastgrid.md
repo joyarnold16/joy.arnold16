@@ -181,8 +181,42 @@ All of this is shipped or built, so do not propose it as new:
 - **Shove reward** — double score and a `SHOVE +n` callout.
 - **Opening pallet pocket** in sector 1, so the first charge spreads.
 
-What has *not* been tried: anything outside the app. No video clips, no
-communities, no paid acquisition, no ASO pass beyond the icon and screenshots.
+## The listing could not be found, and that was the whole problem
+
+Checked against the live listing on 6 Nov 2026:
+
+    App name          Nanu Blastgrid
+    Short description Plant charges, dodge drones, bring the demolition
+                      site down. Blast fast.
+
+Play weights the app name above everything else when deciding what to show
+for a search. Neither word in that name is one anybody types: "Nanu" is an
+unknown brand and "Blastgrid" is an invented word with no search volume. The
+short description is no better - "charges", "drones", "demolition site" are
+not search terms either. So the listing could only ever be found by someone
+who already knew its exact name.
+
+That is the explanation for 1 acquisition in 28 days. It is not a mystery and
+it is not the game.
+
+`store/aso.md` holds the replacement copy and the reasoning. The honest
+ceiling is in there too: this makes the listing findable in the long tail,
+not competitive for "bomb game", where the apps above it have millions of
+installs.
+
+**Do not quietly drop the keywords** from a later rewrite of the description
+to make it read better. Readability is worth less here than being findable.
+
+## Regenerating the store assets
+
+`store/` drives the real game headless and captures the screenshots and the
+gameplay video from it, so they cannot drift from what the app looks like.
+Rerun it after any art change; `store/README.md` has the commands and the
+traps.
+
+What has *not* been tried: anything outside Play. No video posted anywhere,
+no communities, no paid acquisition. The footage now exists (`store/`
+regenerates it) but nobody has published it.
 
 ## Art direction
 
@@ -255,8 +289,18 @@ In the repo and not yet shipped: density and patrol changes, the exit survey
 mark, the shove reward, the debug revive path, and the v2.0 art pass — all
 built and tested as debug APKs, bumped to **versionCode 11 / 2.0**.
 
+Also in 2.0: condition cut from three hits to two, and the rewarded revive
+raised from once a run to twice (`REVIVE_MAX`). Both were asked for directly.
+
+Built and verified but **not yet uploaded**: the signed AAB for versionCode
+11 / 2.0, the fifteen new screenshots, and the rewritten listing copy. Until
+someone presses Submit in Play Console, every bit of this is invisible to
+players - live is still versionCode 8 / 1.7, published 12 Oct 2026.
+
 Next planned, not started: a score leaderboard on the daily run through Google
-Play Games Services. The seeded grid it needs already exists; the point is to
-give the game a reason to be opened tomorrow, which it currently has none of.
+Play Games Services, and the in-app review prompt (the listing has no ratings
+at all, which costs both ranking and trust). The seeded grid the leaderboard
+needs already exists; the point is to give the game a reason to be opened
+tomorrow, which it currently has none of.
 
 The Unity port has the level generator and its tests, and nothing else yet.
