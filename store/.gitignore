@@ -1,5 +1,6 @@
 raw/
 out/
+out-feature/
 vid/
 *.zip
 *.aab

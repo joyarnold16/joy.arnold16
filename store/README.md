@@ -18,6 +18,7 @@ Then, from this directory:
     node capture.js tablet7    &&  node make.js tablet7
     node capture.js tablet10   &&  node make.js tablet10
     node record.js             # gameplay video -> vid/*.webm
+    node feature.js            # 1024x500 feature graphic -> out-feature/
 
 Output sizes: phone and 7-inch 1080x1920, 10-inch 1440x2560.
 
@@ -33,7 +34,13 @@ Converting the recording (ffmpeg):
       -r 30 -c:v libx264 -preset slow -crf 19 -pix_fmt yuv420p -an \
       -movflags +faststart vid/blastgrid-gameplay.mp4
 
-`raw/`, `out/` and `vid/` are deliberately not committed — they are large and
+The feature graphic must be **exactly** 1024x500, so `feature.js` renders at
+deviceScaleFactor 1 rather than the 2 the screenshots use. It puts a real
+gameplay frame behind the type instead of a drawing of one, and fades it out
+to the left so the words have clean ground. Play crops it on some surfaces,
+so nothing that matters sits near an edge.
+
+`raw/`, `out/`, `out-feature/` and `vid/` are deliberately not committed — they are large and
 regenerate in under a minute.
 
 ## Things that cost time to find out

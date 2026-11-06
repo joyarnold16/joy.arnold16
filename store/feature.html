@@ -1,0 +1,41 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  html,body{margin:0;background:#0b0a0c;overflow:hidden}
+  /* Play's feature graphic is a fixed 1024x500. It gets cropped on some
+     surfaces, so nothing that matters goes near the edges. */
+  #f{position:relative;width:1024px;height:500px;overflow:hidden;background:#0b0a0c}
+  #bg{position:absolute;right:-40px;top:-170px;width:620px;opacity:.95}
+  /* the board fades out to the left so the type has clean ground to sit on */
+  #veil{position:absolute;inset:0;
+    background:linear-gradient(90deg,#0b0a0c 0%,#0b0a0c 40%,#0b0a0cd0 56%,#0b0a0c40 74%,#0b0a0c00 100%)}
+  #glow{position:absolute;right:120px;top:120px;width:420px;height:300px;
+    background:radial-gradient(circle,#ff8a2466 0%,#ff8a2400 68%)}
+  #txt{position:absolute;left:62px;top:0;height:500px;display:flex;
+       flex-direction:column;justify-content:center;gap:0}
+  .kicker{color:#8d8880;font:600 17px ui-monospace,"DejaVu Sans Mono",monospace;
+          letter-spacing:.34em;margin-bottom:20px}
+  .rule{width:112px;height:6px;background:#f0c246;margin-bottom:26px}
+  h1{margin:0;color:#f6e3b0;font:700 76px ui-monospace,"DejaVu Sans Mono",monospace;
+     letter-spacing:-.02em;line-height:.98}
+  h2{margin:14px 0 0;color:#ff9a3c;font:700 34px ui-monospace,"DejaVu Sans Mono",monospace;
+     letter-spacing:.01em}
+  p{margin:26px 0 0;color:#b9b2a6;font:400 23px ui-monospace,"DejaVu Sans Mono",monospace;
+    line-height:1.5}
+  p b{color:#e6e0d4;font-weight:700}
+</style></head><body>
+<div id="f">
+  <img id="bg">
+  <div id="glow"></div>
+  <div id="veil"></div>
+  <div id="txt">
+    <div class="kicker">DEMOLITION SITE 07</div>
+    <div class="rule"></div>
+    <h1>BLASTGRID</h1>
+    <h2>Bomb Maze Arcade</h2>
+    <p>Drop a charge. Clear the floor.<br><b>Shove a live one into a drone.</b></p>
+  </div>
+</div>
+<script>
+  // real gameplay behind the type, not a drawing of it
+  document.getElementById('bg').src = 'raw/phone-03-blast.png';
+</script></body></html>
