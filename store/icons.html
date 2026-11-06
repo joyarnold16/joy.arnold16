@@ -1,0 +1,146 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  html,body{margin:0;background:#17161a}
+  .row{display:flex;gap:0}
+  canvas{display:block}
+</style></head><body>
+<div class="row" id="row"></div>
+<script>
+const S = 512;
+
+// Shared ground: the game's own near-black, with the floor grid faintly on it
+// so every option sits on the same stage and only the idea differs.
+function base(x, grid){
+  x.fillStyle="#0e0d10"; x.fillRect(0,0,S,S);
+  const g=x.createRadialGradient(S*0.42,S*0.38,0,S*0.5,S*0.5,S*0.78);
+  g.addColorStop(0,"#23222a"); g.addColorStop(1,"#0b0a0c");
+  x.fillStyle=g; x.fillRect(0,0,S,S);
+  if(grid){
+    x.strokeStyle="rgba(150,175,205,.07)"; x.lineWidth=3;
+    for(let i=1;i<6;i++){
+      x.beginPath(); x.moveTo(i*S/6,0); x.lineTo(i*S/6,S); x.stroke();
+      x.beginPath(); x.moveTo(0,i*S/6); x.lineTo(S,i*S/6); x.stroke();
+    }
+  }
+}
+// The raised tile the whole game is built from, at icon scale.
+function tile(x, cx, cy, w, face, lit, dark, plinth, h){
+  const r=w/2;
+  x.fillStyle=plinth; x.fillRect(cx-r,cy-r,w,w);
+  x.beginPath();
+  x.moveTo(cx-r,cy+r); x.lineTo(cx-r,cy-r); x.lineTo(cx+r,cy-r);
+  x.lineTo(cx+r-h,cy-r+h); x.lineTo(cx-r+h,cy-r+h); x.lineTo(cx-r+h,cy+r-h);
+  x.closePath(); x.fillStyle=lit; x.fill();
+  x.beginPath();
+  x.moveTo(cx+r,cy-r); x.lineTo(cx+r,cy+r); x.lineTo(cx-r,cy+r);
+  x.lineTo(cx-r+h,cy+r-h); x.lineTo(cx+r-h,cy+r-h); x.lineTo(cx+r-h,cy-r+h);
+  x.closePath(); x.fillStyle=dark; x.fill();
+  x.fillStyle=face; x.fillRect(cx-r+h,cy-r+h,w-h*2,w-h*2);
+}
+function fireball(x, cx, cy, r, a){
+  const g=x.createRadialGradient(cx,cy,0,cx,cy,r);
+  g.addColorStop(0,"rgba(255,255,248,"+a+")");
+  g.addColorStop(.28,"rgba(255,226,150,"+(a*.95)+")");
+  g.addColorStop(.58,"rgba(255,138,36,"+(a*.8)+")");
+  g.addColorStop(.85,"rgba(201,48,15,"+(a*.45)+")");
+  g.addColorStop(1,"rgba(140,24,8,0)");
+  x.fillStyle=g; x.beginPath(); x.arc(cx,cy,r,0,Math.PI*2); x.fill();
+}
+
+const OPTIONS = {
+// A - the blast cross. The game's actual signature shape: five lit tiles in
+// a plus, which is exactly what every charge does. Nothing else in the store
+// looks like it, and a plus reads at any size.
+A(x){
+  base(x,true);
+  const w=S*0.235, g=S*0.247, cx=S/2, cy=S/2;
+  for(const [dx,dy] of [[0,-1],[-1,0],[1,0],[0,1]])
+    tile(x,cx+dx*g,cy+dy*g,w,"#3a3d44","#575c66","#222429","#17181c",9);
+  x.save(); x.globalCompositeOperation="lighter";
+  for(const [dx,dy] of [[0,-1],[-1,0],[1,0],[0,1]]) fireball(x,cx+dx*g,cy+dy*g,w*0.78,0.85);
+  fireball(x,cx,cy,w*1.15,1);
+  x.restore();
+  for(const [dx,dy] of [[0,-1],[-1,0],[1,0],[0,1],[0,0]]){
+    x.fillStyle="#d8400f"; x.fillRect(cx+dx*g-w/2+7,cy+dy*g-w/2+7,w-14,w-14);
+    x.fillStyle="#ff8a24"; x.fillRect(cx+dx*g-w/2+20,cy+dy*g-w/2+20,w-40,w-40);
+    x.fillStyle="#ffe9b8"; x.fillRect(cx+dx*g-w/2+36,cy+dy*g-w/2+36,w-72,w-72);
+  }
+},
+// B - the charge itself, fuse lit, standing on a tile. The most literal read:
+// "this is a bomb game", understood before the name is.
+B(x){
+  base(x,true);
+  const cx=S/2, cy=S*0.56;
+  x.save(); x.globalCompositeOperation="lighter";
+  fireball(x,cx,cy-S*0.30,S*0.17,0.9); x.restore();
+  x.fillStyle="rgba(0,0,0,.5)";
+  x.beginPath(); x.ellipse(cx+8,cy+S*0.19,S*0.21,S*0.055,0,0,Math.PI*2); x.fill();
+  const w=S*0.40, h=S*0.44;
+  x.fillStyle="#241f1c"; x.fillRect(cx-w/2-9,cy-h/2-9,w+18,h+18);
+  x.fillStyle="#8c4833"; x.fillRect(cx-w/2,cy-h/2,w,h);
+  x.fillStyle="#b3684a"; x.fillRect(cx-w/2,cy-h/2,w,h*0.26);
+  x.fillStyle="#1c1a18"; x.fillRect(cx-w/2,cy+h*0.04,w,h*0.17);
+  x.fillStyle="#f0c246"; x.fillRect(cx-w/2,cy+h*0.30,w,h*0.09);
+  x.strokeStyle="rgba(255,255,255,.26)"; x.lineWidth=7;
+  x.beginPath(); x.moveTo(cx-w/2+4,cy+h/2-4); x.lineTo(cx-w/2+4,cy-h/2+4); x.lineTo(cx+w/2-4,cy-h/2+4); x.stroke();
+  x.strokeStyle="#c8c2b6"; x.lineWidth=11; x.lineCap="round";
+  x.beginPath(); x.moveTo(cx+w*0.30,cy-h/2);
+  x.quadraticCurveTo(cx+w*0.72,cy-h*0.78,cx+w*0.40,cy-h*0.98); x.stroke();
+  x.save(); x.globalCompositeOperation="lighter";
+  fireball(x,cx+w*0.40,cy-h*1.02,S*0.13,1); x.restore();
+},
+// C - a charge mid-shove, sliding into the blast. The move the whole listing
+// leads on, but it needs two readings to land and may be too much at 48px.
+C(x){
+  base(x,true);
+  const w=S*0.30, cy=S/2;
+  x.save(); x.globalCompositeOperation="lighter";
+  fireball(x,S*0.74,cy,S*0.30,0.95); x.restore();
+  x.fillStyle="#d8400f"; x.fillRect(S*0.74-w/2+6,cy-w/2+6,w-12,w-12);
+  x.fillStyle="#ff8a24"; x.fillRect(S*0.74-w/2+18,cy-w/2+18,w-36,w-36);
+  for(let i=0;i<3;i++){
+    x.fillStyle="rgba(255,196,96,"+(0.30-i*0.08)+")";
+    x.fillRect(S*0.30-i*52, cy-w*0.30, 34, w*0.60);
+  }
+  const bw=S*0.26, bh=S*0.30, bx=S*0.33, by=cy;
+  x.fillStyle="rgba(0,0,0,.5)";
+  x.beginPath(); x.ellipse(bx+6,by+bh*0.62,bw*0.62,bh*0.16,0,0,Math.PI*2); x.fill();
+  x.fillStyle="#241f1c"; x.fillRect(bx-bw/2-7,by-bh/2-7,bw+14,bh+14);
+  x.fillStyle="#8c4833"; x.fillRect(bx-bw/2,by-bh/2,bw,bh);
+  x.fillStyle="#b3684a"; x.fillRect(bx-bw/2,by-bh/2,bw,bh*0.26);
+  x.fillStyle="#f0c246"; x.fillRect(bx-bw/2,by+bh*0.26,bw,bh*0.12);
+  x.save(); x.globalCompositeOperation="lighter";
+  fireball(x,bx+bw*0.34,by-bh*0.74,S*0.10,1); x.restore();
+},
+// D - the hi-vis worker, straight on. A character icon stands out in a grid
+// of abstract shapes, but says "game" more than it says "bomb game".
+D(x){
+  base(x,false);
+  const cx=S/2, cy=S*0.56, u=S/512;
+  x.save(); x.globalCompositeOperation="lighter";
+  fireball(x,cx,cy-150*u,S*0.34,0.5); x.restore();
+  x.fillStyle="rgba(0,0,0,.5)";
+  x.beginPath(); x.ellipse(cx+10,cy+170*u,150*u,38*u,0,0,Math.PI*2); x.fill();
+  x.fillStyle="#242220"; x.fillRect(cx-96*u,cy+70*u,70*u,112*u); x.fillRect(cx+26*u,cy+70*u,70*u,112*u);
+  x.fillStyle="#2d322c"; x.fillRect(cx-124*u,cy-84*u,248*u,168*u);
+  x.fillStyle="#f4731f"; x.fillRect(cx-112*u,cy-72*u,224*u,134*u);
+  x.fillStyle="#ff9044"; x.fillRect(cx-112*u,cy-72*u,224*u,38*u);
+  x.fillStyle="#f8f5ea"; x.fillRect(cx-112*u,cy-20*u,224*u,30*u);
+  x.fillStyle="#c9a227"; x.beginPath(); x.arc(cx,cy-110*u,112*u,Math.PI,0); x.fill();
+  x.fillStyle="#f6cc52"; x.beginPath(); x.arc(cx,cy-110*u,90*u,Math.PI,0); x.fill();
+  x.fillStyle="#fff0bd"; x.beginPath(); x.arc(cx-24*u,cy-134*u,44*u,Math.PI,0); x.fill();
+  x.fillStyle="#d8ad2c"; x.fillRect(cx-112*u,cy-110*u,224*u,30*u);
+}
+};
+
+const row=document.getElementById('row');
+window.__src = {};
+for(const k of ['A','B','C','D']){
+  const c=document.createElement('canvas');
+  c.width=S; c.height=S; c.id='icon'+k;
+  row.appendChild(c);
+  OPTIONS[k](c.getContext('2d'));
+  window.__src[k] = c;          // kept so the contact sheet can redraw them small
+}
+window.__ready=true;
+</script></body></html>

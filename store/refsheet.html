@@ -1,0 +1,130 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+  html,body{margin:0;background:#141317;font-family:ui-monospace,"DejaVu Sans Mono",monospace}
+  #sheet{width:1400px;background:#141317;padding:34px 38px 40px;box-sizing:border-box}
+  h1{margin:0 0 4px;color:#f6e3b0;font-size:27px;letter-spacing:.01em}
+  .sub{color:#8d8880;font-size:14px;margin-bottom:26px}
+  .grid{display:flex;gap:26px;align-items:flex-start}
+  .card{background:#1b1a1f;border:1px solid #2b2a31;border-radius:12px;padding:16px}
+  .cap{color:#b9b2a6;font-size:13px;margin-bottom:11px;letter-spacing:.07em}
+  .note{color:#8d8880;font-size:12px;margin-top:10px;line-height:1.45}
+  .sw{display:flex;gap:9px;flex-wrap:wrap;width:300px}
+  .chip{width:68px}
+  .chip i{display:block;height:46px;border-radius:7px;border:1px solid #00000060}
+  .chip span{display:block;color:#8d8880;font-size:10px;margin-top:5px;text-align:center}
+  canvas{display:block;border-radius:8px}
+</style></head><body>
+<div id="sheet">
+  <h1>Blastgrid — art reference for an icon</h1>
+  <div class="sub">Everything here is taken from the shipping build. Match these colours and this weight of shape.</div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="cap">THE GAME AS IT LOOKS</div>
+      <canvas id="shot" width="360" height="360"></canvas>
+      <div class="note">Raised tiles with a lit top-left edge and a dark<br>bottom-right edge, on a cool slate floor.</div>
+    </div>
+
+    <div class="card">
+      <div class="cap">THE CHARGE &amp; THE WORKER</div>
+      <canvas id="sprites" width="360" height="360"></canvas>
+      <div class="note">Left: the charge, lit fuse. Right: the worker in<br>hi-vis and a yellow helmet. Blocky, few details.</div>
+    </div>
+
+    <div class="card">
+      <div class="cap">PALETTE</div>
+      <div class="sw" id="pal"></div>
+      <div class="note" style="width:300px">
+        Near-black and cool slate behind. One warm<br>
+        light source. Saturated accents, never pastel.
+      </div>
+      <div class="cap" style="margin-top:22px">SAFE ZONE</div>
+      <canvas id="safe" width="300" height="300"></canvas>
+      <div class="note" style="width:300px">
+        Android crops the icon to a circle or a squircle.<br>
+        Everything that matters must sit inside the<br>
+        dashed circle, with empty space to the edges.
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const PAL = [
+  ["#0e0d10","void"],["#2b313a","floor"],["#6a6f78","column"],
+  ["#f4731f","hi-vis"],["#f0c246","amber"],["#ff8a24","flame"],
+  ["#d8503c","red"],["#58b05c","green"],["#3f98c4","blue"],["#9a5fc4","violet"]
+];
+const pal=document.getElementById('pal');
+for(const [hex,name] of PAL){
+  const d=document.createElement('div'); d.className='chip';
+  d.innerHTML='<i style="background:'+hex+'"></i><span>'+hex+'</span>';
+  pal.appendChild(d);
+}
+
+// a crop of a real frame, blown up so the tile construction is readable
+const img=new Image();
+img.onload=()=>{
+  const x=document.getElementById('shot').getContext('2d');
+  x.imageSmoothingEnabled=true; x.imageSmoothingQuality='high';
+  x.drawImage(img, 60, 330, 620, 620, 0, 0, 360, 360);
+  window.__shotReady=true;
+};
+img.src='raw/phone-03-blast.png';
+
+// charge and worker redrawn at size, same shapes and colours as the game
+(function(){
+  const c=document.getElementById('sprites'), x=c.getContext('2d');
+  x.fillStyle="#17161b"; x.fillRect(0,0,360,360);
+  x.strokeStyle="rgba(150,175,205,.07)"; x.lineWidth=2;
+  for(let i=1;i<4;i++){ x.beginPath();x.moveTo(i*90,0);x.lineTo(i*90,360);x.stroke();
+                        x.beginPath();x.moveTo(0,i*90);x.lineTo(360,i*90);x.stroke(); }
+  // charge
+  let cx=100, cy=205, w=86, h=100;
+  x.fillStyle="rgba(0,0,0,.5)";
+  x.beginPath(); x.ellipse(cx+5,cy+h/2+13,w*0.62,15,0,0,Math.PI*2); x.fill();
+  x.fillStyle="#241f1c"; x.fillRect(cx-w/2-5,cy-h/2-5,w+10,h+10);
+  x.fillStyle="#8c4833"; x.fillRect(cx-w/2,cy-h/2,w,h);
+  x.fillStyle="#b3684a"; x.fillRect(cx-w/2,cy-h/2,w,h*0.26);
+  x.fillStyle="#1c1a18"; x.fillRect(cx-w/2,cy+h*0.04,w,h*0.17);
+  x.fillStyle="#f0c246"; x.fillRect(cx-w/2,cy+h*0.31,w,h*0.09);
+  x.strokeStyle="rgba(255,255,255,.26)"; x.lineWidth=4;
+  x.beginPath(); x.moveTo(cx-w/2+2,cy+h/2-2); x.lineTo(cx-w/2+2,cy-h/2+2); x.lineTo(cx+w/2-2,cy-h/2+2); x.stroke();
+  x.strokeStyle="#c8c2b6"; x.lineWidth=6; x.lineCap="round";
+  x.beginPath(); x.moveTo(cx+w*0.30,cy-h/2); x.quadraticCurveTo(cx+w*0.74,cy-h*0.80,cx+w*0.42,cy-h*1.02); x.stroke();
+  let g=x.createRadialGradient(cx+w*0.42,cy-h*1.06,0,cx+w*0.42,cy-h*1.06,34);
+  g.addColorStop(0,"rgba(255,255,248,1)"); g.addColorStop(.4,"rgba(255,200,90,.8)");
+  g.addColorStop(1,"rgba(255,120,20,0)");
+  x.fillStyle=g; x.beginPath(); x.arc(cx+w*0.42,cy-h*1.06,34,0,Math.PI*2); x.fill();
+  // worker
+  cx=258; cy=210; const u=1.5;
+  x.fillStyle="rgba(0,0,0,.5)";
+  x.beginPath(); x.ellipse(cx+4,cy+62*u,42*u,11*u,0,0,Math.PI*2); x.fill();
+  x.fillStyle="#242220"; x.fillRect(cx-26*u,cy+26*u,19*u,32*u); x.fillRect(cx+7*u,cy+26*u,19*u,32*u);
+  x.fillStyle="#2d322c"; x.fillRect(cx-34*u,cy-24*u,68*u,48*u);
+  x.fillStyle="#f4731f"; x.fillRect(cx-31*u,cy-21*u,62*u,39*u);
+  x.fillStyle="#ff9044"; x.fillRect(cx-31*u,cy-21*u,62*u,11*u);
+  x.fillStyle="#f8f5ea"; x.fillRect(cx-31*u,cy-6*u,62*u,9*u);
+  x.fillStyle="#c9a227"; x.beginPath(); x.arc(cx,cy-32*u,31*u,Math.PI,0); x.fill();
+  x.fillStyle="#f6cc52"; x.beginPath(); x.arc(cx,cy-32*u,25*u,Math.PI,0); x.fill();
+  x.fillStyle="#fff0bd"; x.beginPath(); x.arc(cx-7*u,cy-39*u,12*u,Math.PI,0); x.fill();
+  x.fillStyle="#d8ad2c"; x.fillRect(cx-31*u,cy-32*u,62*u,8*u);
+})();
+
+// safe-zone diagram
+(function(){
+  const c=document.getElementById('safe'), x=c.getContext('2d');
+  x.fillStyle="#0e0d10"; x.fillRect(0,0,300,300);
+  x.fillStyle="rgba(240,194,70,.07)"; x.fillRect(0,0,300,300);
+  x.strokeStyle="#f0c246"; x.lineWidth=2; x.setLineDash([9,7]);
+  x.beginPath(); x.arc(150,150,99,0,Math.PI*2); x.stroke();   // 66% safe circle
+  x.setLineDash([]);
+  x.strokeStyle="rgba(255,255,255,.18)"; x.lineWidth=1;
+  x.strokeRect(.5,.5,299,299);
+  x.fillStyle="rgba(216,80,60,.16)";
+  x.beginPath(); x.rect(0,0,300,300); x.arc(150,150,99,0,Math.PI*2,true); x.fill();
+  x.fillStyle="#f0c246"; x.font="bold 15px ui-monospace,monospace";
+  x.textAlign="center"; x.fillText("KEEP IT IN HERE", 150, 156);
+  x.fillStyle="#c98a80"; x.font="11px ui-monospace,monospace";
+  x.fillText("this ring can be cropped away", 150, 282);
+})();
+</script></body></html>

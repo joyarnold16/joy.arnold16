@@ -19,6 +19,8 @@ Then, from this directory:
     node capture.js tablet10   &&  node make.js tablet10
     node record.js             # gameplay video -> vid/*.webm
     node feature.js            # 1024x500 feature graphic -> out-feature/
+    node icons.js              # four icon concepts -> icons/
+    node refsheet.js           # art reference sheet -> icons/icon-reference.png
 
 Output sizes: phone and 7-inch 1080x1920, 10-inch 1440x2560.
 
@@ -62,6 +64,27 @@ leans into it and it slides.
 
 **Captions sit over the HUD on purpose.** It is the least interesting strip
 to someone browsing the store, so covering it keeps the whole board visible.
+
+## The icon
+
+Four concepts were drawn in code (`icons.js`) and none of them were liked, so
+the icon is going out to an image generator instead. `ICON-PROMPT.md` carries
+three prompts, the fixes for the usual failure modes, and a reject checklist;
+`refsheet.js` renders the reference sheet that goes with them, showing the
+real palette, the charge and worker sprites, and the adaptive-icon safe zone.
+
+The sheet is committed rather than gitignored like the other output, because
+it is handed to someone outside this repo and regenerating it needs the game
+server running.
+
+Two things that decide whether an icon works, and neither is about taste:
+it has to survive being shrunk to a thumbnail, and nothing that matters can
+sit near the edge, because Android crops the launcher icon to a circle.
+
+Changing the icon is not only a store change. The launcher icon inside the
+app (`app/src/main/res/drawable/ic_launcher_foreground.png`) has to change
+with it, or the store shows one thing and the phone another - which means a
+rebuilt AAB.
 
 ## The copy
 
