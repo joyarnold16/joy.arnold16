@@ -68,7 +68,7 @@ aggressively.
 • A daily run on a grid that is the same for every player, with a day streak
 
 **BUILT TO BE PLAYED ANYWHERE**
-• Plays offline — no connection needed
+• Plays offline — the game needs no connection (ads and the optional revive do)
 • One hand, four directions and a charge button
 • No account, no sign-up
 • Small download, runs on modest phones
@@ -91,6 +91,25 @@ Play does not have a keyword field — it reads the name, the short
 description and the full description. All three now carry these.
 
 ---
+
+## A note on the word "offline"
+
+The app serves AdMob, so "offline" looks like a contradiction. It is not, and
+this was checked in `MainActivity.java` rather than assumed:
+
+- the game is served from inside the APK by `WebViewAssetLoader`, so no asset
+  is ever fetched over the network;
+- `gatherConsentThenInitAds()` is asynchronous and `web.loadUrl(GAME_URL)`
+  does not wait for it, so consent never gates the game starting;
+- the network-failure branch is explicit - ads stay off for that launch and
+  play continues.
+
+So with no connection the game runs in full; the ads and the rewarded revive
+are what go missing. The bullet says exactly that rather than a bare "no
+connection needed", because the revive genuinely is unavailable offline.
+
+Keep the word. "offline games" is one of the highest-volume searches this
+listing can realistically compete for, and the claim is true.
 
 ## WHAT THIS WILL AND WILL NOT DO
 
