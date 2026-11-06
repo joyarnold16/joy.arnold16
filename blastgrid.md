@@ -284,10 +284,32 @@ anything is misconfigured.
 
 ## Current state
 
-Live on Play: **versionCode 8 / 1.7**.
-In the repo and not yet shipped: density and patrol changes, the exit survey
-mark, the shove reward, the debug revive path, and the v2.0 art pass — all
-built and tested as debug APKs, bumped to **versionCode 11 / 2.0**.
+**Submitted for review on 6 Nov 2026: versionCode 11 / 2.0.** Managed
+publishing is off, so it goes live by itself once Google approves it. Until
+then the live build is still versionCode 8 / 1.7, published 12 Oct 2026.
+
+What went in with it: the v2.0 art pass, condition cut to two hits, two
+revives a run, the density and patrol changes, the exit survey mark, the
+shove reward, the CHARGE button fix, a new AI-generated icon, a rewritten
+listing (name, short and full description), fifteen regenerated screenshots
+and a new feature graphic.
+
+The listing rewrite is the part to watch. Before it, the app name was "Nanu
+Blastgrid" and contained no word anyone searches; it is now "Blastgrid: Bomb
+Maze Arcade". Nothing else about the app changed its findability, so if
+acquisitions move at all over the next few weeks, that is what moved them.
+
+**Leave the listing alone for two to three weeks.** Changing it again while
+it is being measured makes the one measurement worth having unreadable. The
+numbers to watch are on the dashboard: device acquisitions, device first
+opens, monthly active devices - 1 / 1 / 5 the day before submission.
+
+Also worth knowing: 30 visitors reached the listing in the 28 days to 1 Nov
+and 1 of them installed, a 3% conversion. Earlier in the app's life it was
+30%. So the problem is no longer only that nobody arrives - people arrive and
+leave. That is what the new screenshots and copy are aimed at.
+Everything in the repo is in that submission. There is no unshipped work
+left on `app/`.
 
 Also in 2.0: condition cut from three hits to two, and the rewarded revive
 raised from once a run to twice (`REVIVE_MAX`). Both were asked for directly.
