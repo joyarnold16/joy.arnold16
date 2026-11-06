@@ -1,7 +1,9 @@
 const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 const path = require('path');
 
-const SIZES = { phone:[1080,1920], tablet7:[1200,1920], tablet10:[1600,2560] };
+// Play accepts 16:9 or 9:16 only - not 'portrait-ish'. Every size here is
+// exactly 9:16, and the 10-inch one also clears its 1080px minimum side.
+const SIZES = { phone:[1080,1920], tablet7:[1080,1920], tablet10:[1440,2560] };
 
 // Ordered: Play shows the first few far more than the rest, so the blast and
 // the shove - the thing no other game in this genre does - lead.

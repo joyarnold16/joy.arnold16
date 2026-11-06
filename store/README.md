@@ -19,8 +19,13 @@ Then, from this directory:
     node capture.js tablet10   &&  node make.js tablet10
     node record.js             # gameplay video -> vid/*.webm
 
-Output sizes: phone 1080x1920, tablet7 1200x1920, tablet10 1600x2560 — all
-inside Play's accepted range.
+Output sizes: phone and 7-inch 1080x1920, 10-inch 1440x2560.
+
+**All three are exactly 9:16, and that is not optional.** Play's uploader
+accepts 16:9 or 9:16 and nothing between: an earlier pass used 1200x1920 for
+the 7-inch set, which is 5:8, and would have been refused at upload. The
+10-inch set also has a higher floor than the others — each side must be at
+least 1080px, which 1440x2560 clears.
 
 Converting the recording (ffmpeg):
 

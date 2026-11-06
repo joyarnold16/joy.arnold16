@@ -4,8 +4,8 @@ const { chromium } = require('/opt/node22/lib/node_modules/playwright');
 // real store asset size, so 540x960 -> 1080x1920.
 const SIZES = {
   phone:    { w: 540,  h: 960  },   // -> 1080x1920
-  tablet7:  { w: 600,  h: 960  },   // -> 1200x1920
-  tablet10: { w: 800,  h: 1280 },   // -> 1600x2560
+  tablet7:  { w: 540,  h: 960  },   // -> 1080x1920  (9:16)
+  tablet10: { w: 720,  h: 1280 },   // -> 1440x2560  (9:16, min side >= 1080)
 };
 const kind = process.argv[2] || 'phone';
 const { w, h } = SIZES[kind];
